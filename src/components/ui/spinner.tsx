@@ -1,0 +1,23 @@
+/**
+ * Small inline loading indicator — a plain SVG ring driven by Tailwind's
+ * built-in `animate-spin`, no extra dependency. `currentColor` so it always
+ * matches whatever text color it's dropped next to (a button's label, an
+ * error message, etc.) without a separate color prop to keep in sync.
+ */
+export function Spinner({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg
+      className={`animate-spin ${className}`}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path
+        className="opacity-90"
+        fill="currentColor"
+        d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4z"
+      />
+    </svg>
+  );
+}

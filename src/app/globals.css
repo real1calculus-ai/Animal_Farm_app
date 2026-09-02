@@ -22,5 +22,15 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Most data entry here happens one-handed on a phone, often in gloves, so
+   inputs get a comfortable minimum target and never trigger iOS's zoom-on-focus
+   (which needs a computed font-size of at least 16px). */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
