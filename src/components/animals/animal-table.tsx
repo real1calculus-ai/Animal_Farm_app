@@ -46,18 +46,7 @@ export function AnimalTable({ animals }: { animals: AnimalListRow[] }) {
               <Td className="whitespace-nowrap text-right tabular-nums">
                 {formatKg(animal.currentWeightKg)}
               </Td>
-              <Td className="whitespace-nowrap">
-                {animal.pen ? (
-                  <Link
-                    href={`/pens/${animal.pen.id}`}
-                    className="underline-offset-2 hover:underline"
-                  >
-                    {animal.pen.name}
-                  </Link>
-                ) : (
-                  "—"
-                )}
-              </Td>
+              <Td className="whitespace-nowrap">{animal.pen?.name ?? "—"}</Td>
               <Td className="whitespace-nowrap">
                 <AnimalStatusBadge status={animal.status} />
               </Td>

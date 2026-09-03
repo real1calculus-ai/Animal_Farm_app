@@ -256,7 +256,12 @@ export async function updateAnimal(
           // so it does not write a PenMovement — /animals/[id] has the move
           // form for that, and inventing history here would corrupt the
           // occupancy trail biosecurity tracing depends on.
-          dateMovedIn: fields.penId && fields.penId !== existing.penId ? new Date() : undefined,
+          dateMovedIn:
+            fields.penId === null
+              ? null
+              : fields.penId !== existing.penId
+                ? new Date()
+                : undefined,
         },
       });
 
@@ -406,7 +411,11 @@ export async function movePen(
     const reason = optionalString(formData, "reason");
 
     if (toPenId === pig.penId) {
-      return { error: "That is the pen this animal is already in." };
+      return {
+        error: toPenId
+          ? "That is the pen this animal is already in."
+          : "This animal is not assigned to a pen, so there is nothing to move it out of.",
+      };
     }
 
     await prisma.$transaction(async (tx) => {

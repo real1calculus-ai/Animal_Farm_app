@@ -15,8 +15,13 @@ function single(value: string | string[] | undefined): string {
   return (Array.isArray(value) ? value[0] : value) ?? "";
 }
 
+/**
+ * Query-string values are attacker-controlled, so an unknown one is dropped
+ * rather than passed to Prisma. `Object.hasOwn` and not `in`: `in` also matches
+ * inherited keys, which would let `?status=toString` through as a status.
+ */
 function asEnum<T extends string>(value: string, allowed: Record<T, string>): T | undefined {
-  return value in allowed ? (value as T) : undefined;
+  return Object.hasOwn(allowed, value) ? (value as T) : undefined;
 }
 
 export default async function AnimalsPage({ searchParams }: PageProps<"/animals">) {
