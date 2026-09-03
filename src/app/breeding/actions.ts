@@ -25,11 +25,8 @@ import {
   PREGNANCY_STATUS_LABELS,
   SEX_LABELS,
 } from "@/lib/labels";
-import {
-  checkMating,
-  findTagCollisions,
-  pigletPedigreeFacts,
-} from "@/lib/db/breeding";
+import { checkMating, findTagCollisions, pigletBreed } from "@/lib/db/breeding";
+import { recomputePedigreeMetrics } from "@/lib/db/animals";
 
 /**
  * Breeding Server Actions.
@@ -277,13 +274,7 @@ export async function recordFarrowing(formData: FormData): Promise<void> {
     );
   }
 
-  const pedigree = await pigletPedigreeFacts(
-    farmId,
-    record.damId,
-    record.sireId,
-    record.dam.breed,
-    record.sire.breed
-  );
+  const breed = pigletBreed(record.dam.breed, record.sire.breed);
 
   const piglets = tagNumbers.map((tagNumber, i) => {
     // Matched against the enum list rather than compared inline. Narrowing a
@@ -302,13 +293,11 @@ export async function recordFarrowing(formData: FormData): Promise<void> {
     return {
       farmId,
       tagNumber,
-      breed: pedigree.breed,
+      breed,
       dateOfBirth: farrowingDate,
       sex,
       motherId: record.damId,
       fatherId: record.sireId,
-      generation: pedigree.generation,
-      inbreedingCoefficient: pedigree.inbreedingCoefficient,
       birthWeightKg: weight,
       currentWeightKg: weight,
       markings: markings[i] ? markings[i] : null,
@@ -322,7 +311,7 @@ export async function recordFarrowing(formData: FormData): Promise<void> {
   });
 
   await prisma.$transaction(async (tx) => {
-    await tx.litter.create({
+    const litter = await tx.litter.create({
       data: {
         breedingRecordId: record.id,
         farrowingDate,
@@ -338,13 +327,24 @@ export async function recordFarrowing(formData: FormData): Promise<void> {
         createdByProfileId: user.id,
         piglets: { create: piglets },
       },
-      select: { id: true },
+      select: { id: true, piglets: { select: { id: true } } },
     });
 
     await tx.breedingRecord.update({
       where: { id: record.id },
       data: { pregnancyStatus: "FARROWED" },
     });
+
+    // Generation depth and Wright's F for the new piglets, computed by the
+    // animals module against a pedigree index loaded *through this
+    // transaction* — so it already contains the rows created a moment ago.
+    // Doing it here rather than from cached parent values keeps one
+    // implementation of the pedigree maths in the codebase.
+    await recomputePedigreeMetrics(
+      farmId,
+      litter.piglets.map((piglet) => piglet.id),
+      tx
+    );
   });
 
   revalidateBreeding(record.id);

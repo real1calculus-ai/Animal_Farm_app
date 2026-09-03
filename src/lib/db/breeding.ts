@@ -8,16 +8,13 @@ import {
   findMatchesForDam,
   type SireMatch,
 } from "@/lib/breeding/match-finder";
-import {
-  classifyRelationship,
-  generationOf,
-  loadPedigreeIndex,
-} from "@/lib/breeding/pedigree";
+import { classifyRelationship, loadPedigreeIndex } from "@/lib/breeding/pedigree";
 import {
   createInbreedingCalculator,
   inbreedingBand,
   type InbreedingBand,
 } from "@/lib/breeding/inbreeding";
+import { getParityMap as animalsParityMap, getParityOf } from "@/lib/db/animals";
 
 /**
  * Shared breeding queries. Everything the breeding screens read goes through
@@ -263,31 +260,22 @@ export async function getSowProductivity(
 }
 
 /**
- * Parity for one female: the number of litters she has farrowed. Life stage
- * (`deriveLifeStage`) and several feed/health rules key off this, so it lives
- * here rather than being re-counted per caller.
+ * Parity for one female: the number of litters she has farrowed, and for a
+ * whole herd at once.
+ *
+ * Both delegate to the animals module rather than counting litters again here.
+ * Parity decides a female's life stage, her ration and her culling decision, so
+ * a second implementation that drifted by one litter would quietly disagree
+ * with the herd list about whether an animal is a gilt or a sow. These stay
+ * exported from the breeding domain because this is where callers look for
+ * them.
  */
 export async function getSowParity(farmId: string, sowId: string): Promise<number> {
-  return prisma.litter.count({ where: { breedingRecord: { farmId, damId: sowId } } });
+  return getParityOf(farmId, sowId);
 }
 
-/** Parity for many females at once, for list screens. */
-export async function getParityMap(
-  farmId: string,
-  sowIds?: string[]
-): Promise<Map<string, number>> {
-  const rows = await prisma.breedingRecord.findMany({
-    where: {
-      farmId,
-      litter: { isNot: null },
-      ...(sowIds ? { damId: { in: sowIds } } : {}),
-    },
-    select: { damId: true },
-  });
-
-  const map = new Map<string, number>();
-  for (const row of rows) map.set(row.damId, (map.get(row.damId) ?? 0) + 1);
-  return map;
+export async function getParityMap(farmId: string): Promise<Map<string, number>> {
+  return animalsParityMap(farmId);
 }
 
 // ---------------------------------------------------------------------------
@@ -576,7 +564,7 @@ export async function getEstrusWatchlist(
     getParityMap(farmId),
   ]);
 
-  const lastByS0w = new Map(latest.map((row) => [row.sowId, row._max.observedAt]));
+  const lastBySow = new Map(latest.map((row) => [row.sowId, row._max.observedAt]));
   const pregnantIds = new Set(openBreedings.map((row) => row.damId));
 
   // Half a cycle of grace: heat detection is a twice-daily eyeball check, and
@@ -584,7 +572,7 @@ export async function getEstrusWatchlist(
   const overdueAfterDays = Math.round(settings.estrusCycleDays * 1.5);
 
   return females.map((sow) => {
-    const lastObservedAt = lastByS0w.get(sow.id) ?? null;
+    const lastObservedAt = lastBySow.get(sow.id) ?? null;
     const pregnant = pregnantIds.has(sow.id);
     const daysSinceObserved = lastObservedAt ? daysBetween(lastObservedAt, now) : null;
 
@@ -812,33 +800,14 @@ export async function checkMating({
 // Piglet registration helpers
 // ---------------------------------------------------------------------------
 
-export type PigletPedigreeFacts = {
-  generation: number;
-  inbreedingCoefficient: number;
-  /** Breed string for the piglets — the parents' breed, or a cross of the two. */
-  breed: string;
-};
-
 /**
- * Generation depth and F for the piglets of a pairing, computed once from the
- * pedigree engine and applied to every piglet in the litter — littermates share
- * both parents, so they share both figures by definition.
+ * Breed string for a litter: the parents' breed when they share one, otherwise
+ * an explicit cross. `Pig.breed` is free text precisely so a farm can record
+ * what it actually keeps, and silently inheriting the dam's breed would make a
+ * crossbred litter look purebred in every report thereafter.
  */
-export async function pigletPedigreeFacts(
-  farmId: string,
-  damId: string,
-  sireId: string,
-  damBreed: string,
-  sireBreed: string
-): Promise<PigletPedigreeFacts> {
-  const index = await loadPedigreeIndex(farmId);
-  const calculator = createInbreedingCalculator(index);
-
-  return {
-    generation: Math.max(generationOf(index, damId), generationOf(index, sireId)) + 1,
-    inbreedingCoefficient: calculator.offspringInbreeding(sireId, damId),
-    breed: damBreed === sireBreed ? damBreed : `${damBreed} × ${sireBreed}`,
-  };
+export function pigletBreed(damBreed: string, sireBreed: string): string {
+  return damBreed === sireBreed ? damBreed : `${damBreed} × ${sireBreed}`;
 }
 
 /**
@@ -847,14 +816,18 @@ export async function pigletPedigreeFacts(
  * editable field on the farrowing form, because plenty of farms number their
  * animals from a book rather than from a scheme.
  */
+export function pigletTagPrefix(damTagNumber: string, farrowingDate: Date): string {
+  const stamp = `${String(farrowingDate.getFullYear()).slice(2)}${String(farrowingDate.getMonth() + 1).padStart(2, "0")}`;
+  return `${damTagNumber}-${stamp}-`;
+}
+
 export async function suggestPigletTags(
   farmId: string,
   damTagNumber: string,
   farrowingDate: Date,
   count: number
 ): Promise<string[]> {
-  const stamp = `${String(farrowingDate.getFullYear()).slice(2)}${String(farrowingDate.getMonth() + 1).padStart(2, "0")}`;
-  const prefix = `${damTagNumber}-${stamp}-`;
+  const prefix = pigletTagPrefix(damTagNumber, farrowingDate);
 
   const taken = new Set(
     (

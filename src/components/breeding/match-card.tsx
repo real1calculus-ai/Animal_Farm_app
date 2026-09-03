@@ -1,7 +1,8 @@
 import { Badge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { formatAge, formatKg } from "@/lib/format";
+import { formatKg } from "@/lib/format";
+import { formatAgeFromDays } from "@/components/breeding/age";
 import { inbreedingBandVariant, type InbreedingBand } from "@/lib/breeding/inbreeding";
 import type { SireMatch } from "@/lib/breeding/match-finder";
 import { ScoreBreakdown } from "@/components/breeding/score-breakdown";
@@ -41,7 +42,7 @@ export function MatchCard({
             </Badge>
           </div>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            {match.breed} · {formatAge(new Date(Date.now() - match.ageDays * 86_400_000))} old ·{" "}
+            {match.breed} · {formatAgeFromDays(match.ageDays)} old ·{" "}
             {formatKg(match.currentWeightKg)} · {match.relationshipLabel}
           </p>
         </div>
