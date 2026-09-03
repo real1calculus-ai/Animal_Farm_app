@@ -48,10 +48,14 @@ export type PenOccupancyRow = {
 /**
  * Every pen with its live occupancy, capacity pressure and cleaning status.
  *
+ * Distinct from `listPensWithOccupancy` in `db/animals.ts`, which is the
+ * lightweight dropdown query used when moving an animal. This one carries the
+ * biosecurity and over-capacity state the /pens screens need.
+ *
  * Occupancy comes from one grouped count rather than a per-pen query, so the
  * list stays a fixed three round trips however many pens the farm has.
  */
-export async function listPensWithOccupancy(
+export async function listPenOccupancy(
   farmId: string,
   options: { includeInactive?: boolean; asOf?: Date } = {}
 ): Promise<PenOccupancyRow[]> {
@@ -148,7 +152,7 @@ export type PenSummary = {
 
 /** Headline occupancy numbers. Read by the dashboard as well as /pens. */
 export async function getPenSummary(farmId: string, asOf?: Date): Promise<PenSummary> {
-  const pens = await listPensWithOccupancy(farmId, { asOf });
+  const pens = await listPenOccupancy(farmId, { asOf });
 
   const totalCapacity = pens.reduce((sum, pen) => sum + pen.capacity, 0);
   const totalOccupancy = pens.reduce((sum, pen) => sum + pen.occupancy, 0);
@@ -169,7 +173,7 @@ export async function listPensWithOverdueBiosecurity(
   farmId: string,
   asOf?: Date
 ): Promise<PenOccupancyRow[]> {
-  const pens = await listPensWithOccupancy(farmId, { asOf });
+  const pens = await listPenOccupancy(farmId, { asOf });
   return pens.filter((pen) => pen.biosecurityOverdue || pen.neverCleaned);
 }
 
@@ -244,7 +248,7 @@ export async function getPenTaskCostCents(penId: string): Promise<number> {
 
 /** Pens as `<select>` options, with occupancy so a full pen reads as full. */
 export async function listPenOptions(farmId: string) {
-  const pens = await listPensWithOccupancy(farmId);
+  const pens = await listPenOccupancy(farmId);
   return pens.map((pen) => ({
     id: pen.id,
     name: pen.name,
