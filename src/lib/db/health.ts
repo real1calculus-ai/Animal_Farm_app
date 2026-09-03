@@ -10,6 +10,7 @@ import type {
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getFarmSettings } from "@/lib/active-farm";
+import { getParityMap } from "@/lib/db/animals";
 import { addDays, ageInDays, daysBetween } from "@/lib/format";
 import { deriveLifeStage } from "@/lib/life-stage";
 import {
@@ -906,9 +907,12 @@ export async function getVaccinationObligations(
   farmId: string,
   asOf: Date = new Date()
 ): Promise<VaccinationObligation[]> {
-  const [settings, protocol, pigs] = await Promise.all([
+  const [settings, protocol, parityByPig, pigs] = await Promise.all([
     getFarmSettings(farmId),
     prisma.vaccinationProtocolItem.findMany({ where: { farmId, isActive: true } }),
+    // Parity comes from the animals module so "how many litters has she had"
+    // has exactly one definition in the codebase.
+    getParityMap(farmId),
     prisma.pig.findMany({
       where: { farmId, status: "ACTIVE" },
       select: {
@@ -926,7 +930,6 @@ export async function getVaccinationObligations(
           },
           orderBy: { administeredAt: "desc" },
         },
-        breedingsAsDam: { select: { id: true }, where: { pregnancyStatus: "FARROWED" } },
       },
     }),
   ]);
@@ -939,7 +942,7 @@ export async function getVaccinationObligations(
     const lifeStage = deriveLifeStage({
       dateOfBirth: pig.dateOfBirth,
       sex: pig.sex,
-      parity: pig.breedingsAsDam.length,
+      parity: parityByPig.get(pig.id) ?? 0,
       weaningAgeDays: settings.weaningAgeDays,
       minBreedingAgeDays:
         pig.sex === "FEMALE" ? settings.minBreedingAgeDaysFemale : settings.minBreedingAgeDaysMale,
@@ -982,7 +985,9 @@ export async function getVaccinationObligations(
         obligations.push({
           ...base,
           isBooster: true,
-          required: !satisfied || lastAdministeredAt !== null,
+          // A booster is always owed once the animal is in the target stage;
+          // it is *satisfied* while the last dose is still in date.
+          required: true,
           satisfied,
           dueDate,
           dueWindowEnd: null,
@@ -1018,7 +1023,7 @@ export async function getVaccinationObligations(
         satisfied: matches.length > 0,
         dueDate: startOfDay(asOf),
         dueWindowEnd: null,
-        status: matches.length > 0 ? "DUE" : "DUE",
+        status: "DUE",
       });
     }
   }

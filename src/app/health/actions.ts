@@ -27,7 +27,6 @@ import {
   optionalDate,
   optionalInt,
   optionalString,
-  requireCents,
   requireDate,
   requireEnum,
   requireString,
@@ -477,6 +476,3 @@ export async function deleteMedication(formData: FormData): Promise<void> {
   revalidatePath("/health");
   revalidatePath(`/health/${medication.healthRecordId}`);
 }
-
-/** Kept for the cost field on the create form, which uses `requireCents`. */
-export const __cents = requireCents;
