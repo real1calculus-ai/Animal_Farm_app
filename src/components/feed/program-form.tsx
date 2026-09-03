@@ -25,12 +25,15 @@ export type ProgramDefaults = {
  */
 export function ProgramForm({
   action,
+  id,
   feedTypes,
   defaults = {},
   submitLabel = "Save programme",
   cancelHref = "/feed/programs",
 }: {
   action: (formData: FormData) => Promise<void>;
+  /** Present on edit — travels with the post so the action knows what to update. */
+  id?: string;
   feedTypes: { id: string; name: string }[];
   defaults?: ProgramDefaults;
   submitLabel?: string;
@@ -38,6 +41,7 @@ export function ProgramForm({
 }) {
   return (
     <form action={action} className="space-y-4">
+      {id ? <input type="hidden" name="id" value={id} /> : null}
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Programme name" htmlFor="name" required>
           <Input id="name" name="name" required maxLength={120} defaultValue={defaults.name ?? ""} placeholder="e.g. Weaner ration 4-10 wk" />

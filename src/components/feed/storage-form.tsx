@@ -11,15 +11,19 @@ export type StorageDefaults = {
 
 export function StorageForm({
   action,
+  id,
   defaults = {},
   submitLabel = "Add location",
 }: {
   action: (formData: FormData) => Promise<void>;
+  /** Present on edit — travels with the post so the action knows what to update. */
+  id?: string;
   defaults?: StorageDefaults;
   submitLabel?: string;
 }) {
   return (
     <form action={action} className="space-y-4">
+      {id ? <input type="hidden" name="id" value={id} /> : null}
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Name" htmlFor="name" required>
           <Input id="name" name="name" required maxLength={120} defaultValue={defaults.name ?? ""} placeholder="e.g. Store room A, Silo 2" />

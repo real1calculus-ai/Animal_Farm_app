@@ -31,12 +31,15 @@ export type FeedTypeDefaults = {
  */
 export function FeedTypeForm({
   action,
+  id,
   suppliers,
   defaults = {},
   submitLabel = "Save feed type",
   cancelHref = "/feed/types",
 }: {
   action: (formData: FormData) => Promise<void>;
+  /** Present on edit — travels with the post so the action knows what to update. */
+  id?: string;
   suppliers: { id: string; name: string }[];
   defaults?: FeedTypeDefaults;
   submitLabel?: string;
@@ -47,6 +50,7 @@ export function FeedTypeForm({
 
   return (
     <form action={action} className="space-y-6">
+      {id ? <input type="hidden" name="id" value={id} /> : null}
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Name" htmlFor="name" required>
           <Input
