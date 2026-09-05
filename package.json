@@ -14,7 +14,8 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "db:check": "node scripts/check-db.mjs"
+    "db:check": "node scripts/check-db.mjs",
+    "verify": "tsx --conditions=react-server scripts/verify-domain.mts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

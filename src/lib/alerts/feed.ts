@@ -3,6 +3,11 @@ import { addDays, daysBetween, formatDate, formatKg } from "@/lib/format";
 import type { Alert } from "@/lib/alerts/types";
 
 const EXPIRY_HORIZON_DAYS = 30;
+const RECENT_WINDOW_DAYS = 3;
+const BASELINE_WINDOW_DAYS = 7;
+/** Fewer recorded days than this and there is no baseline worth comparing to. */
+const MIN_BASELINE_DAYS = 4;
+const DROP_THRESHOLD = 0.25;
 
 export async function feedAlerts(farmId: string, now: Date): Promise<Alert[]> {
   const alerts: Alert[] = [];
@@ -71,52 +76,64 @@ export async function feedAlerts(farmId: string, now: Date): Promise<Alert[]> {
   // shows a day or two before anything a person would notice on a walk-round.
   // Compared against the pen's own recent baseline rather than a herd average,
   // since intake scales with the size and stage of the animals in it.
-  const recentStart = addDays(now, -3);
-  const baselineStart = addDays(now, -10);
+  //
+  // The averages divide by the number of days that actually carry a record,
+  // not by the nominal width of the window. Dividing by a fixed 3 and 7 makes
+  // a pen fed identically every day report a 33% collapse the moment a
+  // boundary clips one record — and an alert panel that cries wolf is one
+  // people stop reading, which costs more than the feature is worth.
+  const recentStart = addDays(now, -RECENT_WINDOW_DAYS);
+  const baselineStart = addDays(now, -(RECENT_WINDOW_DAYS + BASELINE_WINDOW_DAYS));
 
-  const [recent, baseline] = await Promise.all([
-    prisma.feedingRecord.groupBy({
-      by: ["penId"],
-      where: { farmId, penId: { not: null }, fedAt: { gte: recentStart, lte: now } },
-      _sum: { allocatedKg: true },
-    }),
-    prisma.feedingRecord.groupBy({
-      by: ["penId"],
-      where: { farmId, penId: { not: null }, fedAt: { gte: baselineStart, lt: recentStart } },
-      _sum: { allocatedKg: true },
-    }),
-  ]);
+  const records = await prisma.feedingRecord.findMany({
+    where: { farmId, penId: { not: null }, fedAt: { gte: baselineStart, lte: now } },
+    select: { penId: true, fedAt: true, allocatedKg: true },
+  });
 
-  const baselineByPen = new Map(
-    baseline.map((row) => [row.penId, (row._sum.allocatedKg ?? 0) / 7])
-  );
+  type Window = { total: number; days: Set<string> };
+  const byPen = new Map<string, { recent: Window; baseline: Window }>();
 
-  const penIds = recent.map((row) => row.penId).filter((id): id is string => id !== null);
+  for (const record of records) {
+    if (!record.penId) continue;
+
+    const entry =
+      byPen.get(record.penId) ??
+      { recent: { total: 0, days: new Set<string>() }, baseline: { total: 0, days: new Set<string>() } };
+
+    const window = record.fedAt.getTime() >= recentStart.getTime() ? entry.recent : entry.baseline;
+    window.total += record.allocatedKg;
+    // Several feeds in a day are one day's intake, not several.
+    window.days.add(record.fedAt.toISOString().slice(0, 10));
+
+    byPen.set(record.penId, entry);
+  }
+
+  const penIds = [...byPen.keys()];
   const pens = penIds.length
     ? await prisma.pen.findMany({ where: { id: { in: penIds } }, select: { id: true, name: true } })
     : [];
   const penNames = new Map(pens.map((pen) => [pen.id, pen.name]));
 
-  for (const row of recent) {
-    if (!row.penId) continue;
-    const dailyBaseline = baselineByPen.get(row.penId);
-    // Needs a week of history behind it; below that a "drop" is just a day
-    // somebody forgot to write the record down.
-    if (!dailyBaseline || dailyBaseline <= 0) continue;
+  for (const [penId, entry] of byPen) {
+    // Needs a real baseline behind it: below a few days of history, a "drop"
+    // is just a day somebody forgot to write down.
+    if (entry.baseline.days.size < MIN_BASELINE_DAYS || entry.recent.days.size === 0) continue;
 
-    const dailyRecent = (row._sum.allocatedKg ?? 0) / 3;
+    const dailyBaseline = entry.baseline.total / entry.baseline.days.size;
+    const dailyRecent = entry.recent.total / entry.recent.days.size;
+    if (dailyBaseline <= 0) continue;
+
     const drop = 1 - dailyRecent / dailyBaseline;
+    if (drop < DROP_THRESHOLD) continue;
 
-    if (drop >= 0.25) {
-      alerts.push({
-        key: `feed-drop:${row.penId}`,
-        severity: "WARNING",
-        title: "Feed intake down",
-        detail: `${penNames.get(row.penId) ?? "A pen"} is eating ${Math.round(drop * 100)}% less than its previous week (${formatKg(dailyRecent, 1)}/day against ${formatKg(dailyBaseline, 1)}). Reduced intake often precedes visible illness.`,
-        href: `/pens/${row.penId}`,
-        family: "FEED",
-      });
-    }
+    alerts.push({
+      key: `feed-drop:${penId}`,
+      severity: "WARNING",
+      title: "Feed intake down",
+      detail: `${penNames.get(penId) ?? "A pen"} is eating ${Math.round(drop * 100)}% less than its previous week (${formatKg(dailyRecent, 1)}/day against ${formatKg(dailyBaseline, 1)}). Reduced intake often precedes visible illness.`,
+      href: `/pens/${penId}`,
+      family: "FEED",
+    });
   }
 
   return alerts;
