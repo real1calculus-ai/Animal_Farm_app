@@ -65,5 +65,12 @@ React 19, Prisma 6 + PostgreSQL on Supabase, Tailwind 4, Supabase Auth.
 
 - `npm run typecheck` and `npm run lint` must both pass.
 - `npm test` runs the domain tests (`tsx --test`).
-- There is no database connection in development yet, so **do not run
-  `prisma migrate`**. `prisma generate` and `prisma validate` work offline.
+- The database is live on Supabase. `npm run db:check` reports the real
+  Postgres error when a connection fails — Prisma collapses everything,
+  including a wrong password, into P1001 "Can't reach database server".
+- `npm run verify` exercises the match finder and alert engine against real
+  data. Typechecking proves shapes; only this proves the queries work.
+- `npm run db:seed` is idempotent; `RESEED=1 npm run db:seed` rebuilds.
+- Migrations run through `DIRECT_URL` (session pooler, 5432). After a password
+  reset the transaction pooler on 6543 serves a stale credential for a few
+  minutes while the session pooler updates immediately.
