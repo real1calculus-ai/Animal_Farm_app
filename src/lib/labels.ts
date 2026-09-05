@@ -44,19 +44,19 @@ export const HOUSING_TYPE_LABELS = {
   NURSERY: "Nursery",
   GROWER: "Grower",
   FINISHER: "Finisher",
-  BOAR: "Boar",
+  BREEDING_MALE: "Breeding male",
   ISOLATION: "Isolation",
   QUARANTINE: "Quarantine",
 } as const;
 
 export const LIFE_STAGE_LABELS = {
-  PIGLET: "Piglet",
+  YOUNG: "Young",
   WEANER: "Weaner",
   GROWER: "Grower",
   FINISHER: "Finisher",
-  GILT: "Gilt",
-  SOW: "Sow",
-  BOAR: "Boar",
+  MAIDEN_FEMALE: "Maiden female",
+  BREEDING_FEMALE: "Breeding female",
+  BREEDING_MALE: "Breeding male",
 } as const;
 
 export const BREEDING_METHOD_LABELS = {
@@ -126,7 +126,7 @@ export const FEED_CLASSIFICATION_LABELS = {
   FINISHER: "Finisher",
   GESTATION: "Gestation",
   LACTATION: "Lactation",
-  BOAR: "Boar",
+  BREEDING_MALE: "Breeding male",
   SUPPLEMENT: "Supplement",
 } as const;
 
@@ -147,8 +147,8 @@ export const TRANSACTION_CATEGORY_LABELS = {
   TRANSPORT: "Transport",
   MARKETING: "Marketing",
   OTHER_EXPENSE: "Other expense",
-  PIGLET_SALE: "Piglet sale",
-  FINISHED_PIG_SALE: "Finished pig sale",
+  YOUNG_STOCK_SALE: "Young stock sale",
+  FINISHED_PIG_SALE: "Finished animal sale",
   CULL_SALE: "Cull sale",
   BREEDING_STOCK_SALE: "Breeding stock sale",
   SERVICE_INCOME: "Service income",
@@ -171,7 +171,7 @@ export const EXPENSE_CATEGORIES = [
 ] as const;
 
 export const INCOME_CATEGORIES = [
-  "PIGLET_SALE",
+  "YOUNG_STOCK_SALE",
   "FINISHED_PIG_SALE",
   "CULL_SALE",
   "BREEDING_STOCK_SALE",
@@ -180,8 +180,8 @@ export const INCOME_CATEGORIES = [
 ] as const;
 
 export const ANIMAL_SALE_TYPE_LABELS = {
-  FEEDER_PIG: "Feeder pig",
-  FINISHED_PIG: "Finished pig",
+  FEEDER: "Feeder / store animal",
+  FINISHED_PIG: "Finished animal",
   BREEDING_STOCK: "Breeding stock",
   CULL: "Cull",
 } as const;
@@ -210,7 +210,7 @@ export const HALF_SIB_POLICY_LABELS = {
   BLOCK: "Block entirely",
 } as const;
 
-/** Common pig breeds, offered as suggestions rather than enforced — breed is a
+/** Common animal breeds, offered as suggestions rather than enforced — breed is a
  *  free-text field so a farm can record whatever it actually keeps. */
 export const COMMON_BREEDS = [
   "Duroc",

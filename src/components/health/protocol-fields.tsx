@@ -39,7 +39,7 @@ export function ProtocolFields({
             id={`${idPrefix}-name`}
             name="name"
             required
-            placeholder="e.g. Piglet primary course"
+            placeholder="e.g. Offspring primary course"
             defaultValue={defaults?.name ?? ""}
           />
         </Field>
@@ -56,7 +56,7 @@ export function ProtocolFields({
             id={`${idPrefix}-targetStage`}
             name="targetStage"
             required
-            defaultValue={defaults?.targetStage ?? "PIGLET"}
+            defaultValue={defaults?.targetStage ?? "YOUNG"}
           >
             {STAGE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>

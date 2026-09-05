@@ -16,6 +16,8 @@
 
 import { PrismaClient, type Prisma, type Sex } from "@prisma/client";
 
+import { ensureSpeciesCatalogue } from "../src/lib/db/species";
+
 const prisma = new PrismaClient();
 
 const FARM_NAME = "Green Pastures Piggery";
@@ -41,21 +43,28 @@ async function main() {
     create: { farmId: farm.id },
   });
 
-  const existingPigs = await prisma.pig.count({ where: { farmId: farm.id } });
+  const existingAnimals = await prisma.animal.count({ where: { farmId: farm.id } });
 
-  if (existingPigs > 0 && process.env.RESEED !== "1") {
+  if (existingAnimals > 0 && process.env.RESEED !== "1") {
     console.log(
-      `"${FARM_NAME}" already has ${existingPigs} animals — nothing to do. Run with RESEED=1 to rebuild the demo data.`
+      `"${FARM_NAME}" already has ${existingAnimals} animals — nothing to do. Run with RESEED=1 to rebuild the demo data.`
     );
     return;
   }
 
-  if (existingPigs > 0) {
+  if (existingAnimals > 0) {
     console.log("RESEED=1 — clearing the demo farm's data...");
     await clearFarm(farm.id);
   }
 
   const settings = await prisma.farmSettings.findUniqueOrThrow({ where: { farmId: farm.id } });
+
+  // Species carry the biology every projected date depends on, so they have to
+  // exist before a single animal does.
+  await ensureSpeciesCatalogue(farm.id);
+  const speciesRows = await prisma.species.findMany({ where: { farmId: farm.id } });
+  const species = new Map(speciesRows.map((row) => [row.code, row]));
+  const pigSpeciesId = species.get("PIG")!.id;
 
   // --- Housing ----------------------------------------------------------
   const pens = await createPens(farm.id);
@@ -64,14 +73,14 @@ async function main() {
   // Generation 0: purchased stock with no recorded parents. Their inbreeding
   // coefficient is 0 by definition, which is what makes them founders.
   const founders = await Promise.all([
-    createPig(farm.id, { tag: "B-001", name: "Kano", breed: "Duroc", sex: "MALE", ageDays: 1100, penId: pens.boar.id, weightKg: 265, bcs: 3 }),
-    createPig(farm.id, { tag: "B-002", name: "Zaria", breed: "Large White", sex: "MALE", ageDays: 980, penId: pens.boar.id, weightKg: 248, bcs: 3 }),
-    createPig(farm.id, { tag: "B-003", name: "Oyo", breed: "Pietrain", sex: "MALE", ageDays: 860, penId: pens.boar.id, weightKg: 232, bcs: 4 }),
-    createPig(farm.id, { tag: "S-001", name: "Ada", breed: "Landrace", sex: "FEMALE", ageDays: 1180, penId: pens.gestation.id, weightKg: 212, bcs: 3 }),
-    createPig(farm.id, { tag: "S-002", name: "Ngozi", breed: "Duroc", sex: "FEMALE", ageDays: 1050, penId: pens.gestation.id, weightKg: 198, bcs: 3 }),
-    createPig(farm.id, { tag: "S-003", name: "Amina", breed: "Large White", sex: "FEMALE", ageDays: 990, penId: pens.gestation.id, weightKg: 205, bcs: 2 }),
-    createPig(farm.id, { tag: "S-004", name: "Chidi", breed: "Landrace", sex: "FEMALE", ageDays: 930, penId: pens.gestation.id, weightKg: 189, bcs: 3 }),
-    createPig(farm.id, { tag: "S-005", name: "Bisi", breed: "Berkshire", sex: "FEMALE", ageDays: 870, penId: pens.gestation.id, weightKg: 194, bcs: 3 }),
+    createAnimal(farm.id, { tag: "B-001", speciesId: pigSpeciesId, name: "Kano", breed: "Duroc", sex: "MALE", ageDays: 1100, penId: pens.boar.id, weightKg: 265, bcs: 3 }),
+    createAnimal(farm.id, { tag: "B-002", speciesId: pigSpeciesId, name: "Zaria", breed: "Large White", sex: "MALE", ageDays: 980, penId: pens.boar.id, weightKg: 248, bcs: 3 }),
+    createAnimal(farm.id, { tag: "B-003", speciesId: pigSpeciesId, name: "Oyo", breed: "Pietrain", sex: "MALE", ageDays: 860, penId: pens.boar.id, weightKg: 232, bcs: 4 }),
+    createAnimal(farm.id, { tag: "S-001", speciesId: pigSpeciesId, name: "Ada", breed: "Landrace", sex: "FEMALE", ageDays: 1180, penId: pens.gestation.id, weightKg: 212, bcs: 3 }),
+    createAnimal(farm.id, { tag: "S-002", speciesId: pigSpeciesId, name: "Ngozi", breed: "Duroc", sex: "FEMALE", ageDays: 1050, penId: pens.gestation.id, weightKg: 198, bcs: 3 }),
+    createAnimal(farm.id, { tag: "S-003", speciesId: pigSpeciesId, name: "Amina", breed: "Large White", sex: "FEMALE", ageDays: 990, penId: pens.gestation.id, weightKg: 205, bcs: 2 }),
+    createAnimal(farm.id, { tag: "S-004", speciesId: pigSpeciesId, name: "Chidi", breed: "Landrace", sex: "FEMALE", ageDays: 930, penId: pens.gestation.id, weightKg: 189, bcs: 3 }),
+    createAnimal(farm.id, { tag: "S-005", speciesId: pigSpeciesId, name: "Bisi", breed: "Berkshire", sex: "FEMALE", ageDays: 870, penId: pens.gestation.id, weightKg: 194, bcs: 3 }),
   ]);
 
   const [kano, zaria, oyo, ada, ngozi, amina, chidi] = founders;
@@ -81,6 +90,7 @@ async function main() {
   // half-siblings, which is exactly the pairing the match finder should warn
   // about rather than silently allow.
   const litterA = await breedAndFarrow(farm.id, settings.gestationDays, {
+    speciesId: pigSpeciesId,
     sire: kano,
     dam: ada,
     bredDaysAgo: 620,
@@ -88,7 +98,7 @@ async function main() {
     stillborn: 1,
     penId: pens.grower.id,
     tagPrefix: "G1A",
-    piglets: [
+    offspring: [
       { sex: "MALE", breed: "Duroc" },
       { sex: "FEMALE", breed: "Duroc" },
       { sex: "FEMALE", breed: "Duroc" },
@@ -96,6 +106,7 @@ async function main() {
   });
 
   const litterB = await breedAndFarrow(farm.id, settings.gestationDays, {
+    speciesId: pigSpeciesId,
     sire: kano,
     dam: ngozi,
     bredDaysAgo: 560,
@@ -103,13 +114,14 @@ async function main() {
     stillborn: 0,
     penId: pens.grower.id,
     tagPrefix: "G1B",
-    piglets: [
+    offspring: [
       { sex: "MALE", breed: "Duroc" },
       { sex: "FEMALE", breed: "Duroc" },
     ],
   });
 
   const litterC = await breedAndFarrow(farm.id, settings.gestationDays, {
+    speciesId: pigSpeciesId,
     sire: zaria,
     dam: amina,
     bredDaysAgo: 540,
@@ -117,7 +129,7 @@ async function main() {
     stillborn: 1,
     penId: pens.finisher.id,
     tagPrefix: "G1C",
-    piglets: [
+    offspring: [
       { sex: "MALE", breed: "Large White" },
       { sex: "FEMALE", breed: "Large White" },
     ],
@@ -128,6 +140,7 @@ async function main() {
   // the finder should rank highest, and it gives generation-2 animals so the
   // pedigree tree has real depth to draw.
   await breedAndFarrow(farm.id, settings.gestationDays, {
+    speciesId: pigSpeciesId,
     sire: litterC[0],
     dam: litterA[1],
     bredDaysAgo: 200,
@@ -135,7 +148,7 @@ async function main() {
     stillborn: 0,
     penId: pens.nursery.id,
     tagPrefix: "G2A",
-    piglets: [
+    offspring: [
       { sex: "MALE", breed: "Crossbred" },
       { sex: "FEMALE", breed: "Crossbred" },
       { sex: "FEMALE", breed: "Crossbred" },
@@ -154,7 +167,7 @@ async function main() {
       pregnancyStatus: "CONFIRMED",
       confirmationMethod: "ULTRASOUND",
       confirmationDate: daysAgo(70),
-      expectedPigletCount: 10,
+      expectedOffspringCount: 10,
     },
   });
 
@@ -191,14 +204,14 @@ async function main() {
   await seedEquipment(farm.id);
   await seedOverheads(farm.id);
 
-  const total = await prisma.pig.count({ where: { farmId: farm.id } });
+  const total = await prisma.animal.count({ where: { farmId: farm.id } });
   console.log(`Seeded "${FARM_NAME}": ${total} animals across ${Object.keys(pens).length} pens.`);
   console.log("Sign up in the app — the first account becomes this farm's administrator.");
 }
 
 /**
  * Clears the demo farm's records. Ordered child-first: most relations cascade,
- * but pens are only nulled from Pig, so animals must go before pens do.
+ * but pens are only nulled from Animal, so animals must go before pens do.
  */
 async function clearFarm(farmId: string) {
   await prisma.feedingRecord.deleteMany({ where: { farmId } });
@@ -212,17 +225,17 @@ async function clearFarm(farmId: string) {
   await prisma.maintenanceRecord.deleteMany({ where: { equipment: { farmId } } });
   await prisma.equipment.deleteMany({ where: { farmId } });
   await prisma.healthRecord.deleteMany({ where: { farmId } });
-  await prisma.vaccinationRecord.deleteMany({ where: { pig: { farmId } } });
+  await prisma.vaccinationRecord.deleteMany({ where: { animal: { farmId } } });
   await prisma.vaccinationProtocolItem.deleteMany({ where: { farmId } });
   await prisma.breedingRecord.deleteMany({ where: { farmId } });
-  await prisma.pig.deleteMany({ where: { farmId } });
+  await prisma.animal.deleteMany({ where: { farmId } });
   await prisma.pen.deleteMany({ where: { farmId } });
   await prisma.alertAcknowledgement.deleteMany({ where: { farmId } });
 }
 
 async function createPens(farmId: string) {
   const spec = [
-    { key: "boar", name: "Boar pen", housingType: "BOAR", capacity: 4 },
+    { key: "boar", name: "Boar pen", housingType: "BREEDING_MALE", capacity: 4 },
     { key: "gestation", name: "Gestation 1", housingType: "GESTATION", capacity: 12 },
     { key: "farrowing", name: "Farrowing 1", housingType: "FARROWING", capacity: 6 },
     { key: "nursery", name: "Nursery 1", housingType: "NURSERY", capacity: 30 },
@@ -274,7 +287,7 @@ async function createPens(farmId: string) {
   };
 }
 
-type PigSeed = {
+type AnimalSeed = {
   tag: string;
   name?: string;
   breed: string;
@@ -289,16 +302,18 @@ type PigSeed = {
   litterId?: string;
   birthWeightKg?: number;
   purchased?: boolean;
+  speciesId: string;
 };
 
-async function createPig(farmId: string, seed: PigSeed) {
+async function createAnimal(farmId: string, seed: AnimalSeed) {
   const dateOfBirth = daysAgo(seed.ageDays);
 
-  return prisma.pig.upsert({
+  return prisma.animal.upsert({
     where: { farmId_tagNumber: { farmId, tagNumber: seed.tag } },
     update: {},
     create: {
       farmId,
+      speciesId: seed.speciesId,
       tagNumber: seed.tag,
       name: seed.name ?? null,
       breed: seed.breed,
@@ -324,10 +339,10 @@ async function createPig(farmId: string, seed: PigSeed) {
   });
 }
 
-type PigRow = Prisma.PigGetPayload<object>;
+type AnimalRow = Prisma.AnimalGetPayload<object>;
 
 /**
- * Records a mating that reached term, its litter, and the piglets it produced —
+ * Records a mating that reached term, its litter, and the offspring it produced —
  * the same shape the app's farrowing flow writes, so seeded animals are
  * indistinguishable from ones entered by hand.
  */
@@ -335,16 +350,17 @@ async function breedAndFarrow(
   farmId: string,
   gestationDays: number,
   spec: {
-    sire: PigRow;
-    dam: PigRow;
+    sire: AnimalRow;
+    dam: AnimalRow;
     bredDaysAgo: number;
     bornAlive: number;
     stillborn: number;
     penId: string;
     tagPrefix: string;
-    piglets: { sex: Sex; breed: string }[];
+    speciesId: string;
+    offspring: { sex: Sex; breed: string }[];
   }
-): Promise<PigRow[]> {
+): Promise<AnimalRow[]> {
   const breedingDate = daysAgo(spec.bredDaysAgo);
   const farrowingDate = daysAgo(spec.bredDaysAgo - gestationDays);
 
@@ -379,13 +395,14 @@ async function breedAndFarrow(
   const ageDays = Math.max(1, spec.bredDaysAgo - gestationDays);
   const generation = Math.max(spec.sire.generation, spec.dam.generation) + 1;
 
-  const piglets: PigRow[] = [];
-  for (const [index, piglet] of spec.piglets.entries()) {
-    piglets.push(
-      await createPig(farmId, {
+  const created: AnimalRow[] = [];
+  for (const [index, young] of spec.offspring.entries()) {
+    created.push(
+      await createAnimal(farmId, {
+        speciesId: spec.speciesId,
         tag: `${spec.tagPrefix}-${String(index + 1).padStart(2, "0")}`,
-        breed: piglet.breed,
-        sex: piglet.sex,
+        breed: young.breed,
+        sex: young.sex,
         ageDays,
         penId: spec.penId,
         // Rough liveweight for age, so growth charts and the finisher list are
@@ -401,26 +418,26 @@ async function breedAndFarrow(
     );
   }
 
-  return piglets;
+  return created;
 }
 
 /** A short weigh-in history per animal, so ADG and growth curves have slope. */
 async function seedWeights(farmId: string) {
-  const pigs = await prisma.pig.findMany({
+  const animals = await prisma.animal.findMany({
     where: { farmId, currentWeightKg: { not: null } },
     select: { id: true, currentWeightKg: true, dateOfBirth: true },
   });
 
-  for (const pig of pigs) {
-    const current = pig.currentWeightKg ?? 0;
+  for (const animal of animals) {
+    const current = animal.currentWeightKg ?? 0;
     for (const [index, offsetDays] of [60, 30, 0].entries()) {
       // Walk backwards from the current weight rather than forwards from birth:
-      // the latest reading must match Pig.currentWeightKg exactly, or the
+      // the latest reading must match Animal.currentWeightKg exactly, or the
       // record page and the herd list disagree on the same animal.
       const weightKg = Math.max(1, Math.round((current - (2 - index) * current * 0.12) * 10) / 10);
       await prisma.weightRecord.create({
         data: {
-          pigId: pig.id,
+          animalId: animal.id,
           recordedAt: daysAgo(offsetDays),
           weightKg,
           bodyConditionScore: 3,
@@ -430,22 +447,22 @@ async function seedWeights(farmId: string) {
   }
 }
 
-async function seedHealth(farmId: string, subjects: PigRow[]) {
+async function seedHealth(farmId: string, subjects: AnimalRow[]) {
   const [sick, treated, sow] = subjects;
 
   await prisma.vaccinationProtocolItem.createMany({
     data: [
-      { farmId, name: "Piglet iron + Mycoplasma", vaccineName: "Mycoplasma hyopneumoniae", targetStage: "PIGLET", ageDaysMin: 14, ageDaysMax: 21 },
+      { farmId, name: "Offspring iron + Mycoplasma", vaccineName: "Mycoplasma hyopneumoniae", targetStage: "YOUNG", ageDaysMin: 14, ageDaysMax: 21 },
       { farmId, name: "Weaner PRRS", vaccineName: "PRRS", targetStage: "WEANER", ageDaysMin: 42, ageDaysMax: 56 },
       { farmId, name: "Grower booster", vaccineName: "Circovirus", targetStage: "GROWER", ageDaysMin: 70, ageDaysMax: 84 },
-      { farmId, name: "Sow annual parvo", vaccineName: "Parvovirus", targetStage: "SOW", boosterIntervalDays: 365 },
+      { farmId, name: "Sow annual parvo", vaccineName: "Parvovirus", targetStage: "BREEDING_FEMALE", boosterIntervalDays: 365 },
     ],
     skipDuplicates: true,
   });
 
   await prisma.vaccinationRecord.create({
     data: {
-      pigId: sow.id,
+      animalId: sow.id,
       vaccineName: "Parvovirus",
       administeredAt: daysAgo(300),
       lotNumber: "PV-2415",
@@ -459,7 +476,7 @@ async function seedHealth(farmId: string, subjects: PigRow[]) {
   const respiratory = await prisma.healthRecord.create({
     data: {
       farmId,
-      pigId: sick.id,
+      animalId: sick.id,
       recordedAt: daysAgo(4),
       recordType: "ILLNESS",
       category: "RESPIRATORY",
@@ -488,7 +505,7 @@ async function seedHealth(farmId: string, subjects: PigRow[]) {
   const lameness = await prisma.healthRecord.create({
     data: {
       farmId,
-      pigId: treated.id,
+      animalId: treated.id,
       recordedAt: daysAgo(40),
       recordType: "INJURY",
       category: "MUSCULOSKELETAL",
@@ -600,7 +617,7 @@ async function seedFeed(farmId: string, growerPenId: string, finisherPenId: stri
           create: {
             farmId,
             name: `${type.name} ration`,
-            stage: type.classification === "GROWER" ? "GROWER" : type.classification === "FINISHER" ? "FINISHER" : "SOW",
+            stage: type.classification === "GROWER" ? "GROWER" : type.classification === "FINISHER" ? "FINISHER" : "BREEDING_FEMALE",
             feedTypeId: feedType.id,
             dailyKgPerAnimal: type.classification === "GESTATION" ? 2.5 : 2.0,
           },
@@ -609,7 +626,7 @@ async function seedFeed(farmId: string, growerPenId: string, finisherPenId: stri
         // Fourteen days of pen feeding, so feed conversion and the
         // consumption-drop detector have a series to work with.
         const penId = type.classification === "FINISHER" ? finisherPenId : growerPenId;
-        const animalCount = await prisma.pig.count({ where: { penId } });
+        const animalCount = await prisma.animal.count({ where: { penId } });
 
         if (animalCount > 0) {
           for (let day = 14; day >= 1; day--) {

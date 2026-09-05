@@ -106,7 +106,7 @@ export async function findMatchesForDam(
   damId: string,
   settings: FarmSettings
 ): Promise<MatchFinderResult> {
-  const dam = await prisma.pig.findFirst({
+  const dam = await prisma.animal.findFirst({
     where: { id: damId, farmId },
     select: {
       id: true,
@@ -128,9 +128,9 @@ export async function findMatchesForDam(
   const now = new Date();
   const yearAgo = new Date(now.getTime() - DAYS_PER_YEAR * 86_400_000);
 
-  const [index, candidates, breedingLoad, healthByPig, conceptionBySire] = await Promise.all([
+  const [index, candidates, breedingLoad, healthByAnimal, conceptionBySire] = await Promise.all([
     loadPedigreeIndex(farmId),
-    prisma.pig.findMany({
+    prisma.animal.findMany({
       where: { farmId, sex: "MALE", status: "ACTIVE" },
       select: {
         id: true,
@@ -185,7 +185,7 @@ export async function findMatchesForDam(
       settings,
       now,
       breedingsLastYear: loadBySire.get(sire.id) ?? 0,
-      healthScore: healthByPig.get(sire.id) ?? 1,
+      healthScore: healthByAnimal.get(sire.id) ?? 1,
       conceptionRate: conceptionBySire.get(sire.id) ?? null,
     });
 
@@ -412,7 +412,7 @@ function explain({
  */
 async function loadHealthScores(farmId: string, since: Date): Promise<Map<string, number>> {
   const records = await prisma.healthRecord.groupBy({
-    by: ["pigId", "severity", "category"],
+    by: ["animalId", "severity", "category"],
     where: { farmId, recordedAt: { gte: since }, recordType: { in: ["ILLNESS", "INJURY"] } },
     _count: { _all: true },
   });
@@ -420,18 +420,20 @@ async function loadHealthScores(farmId: string, since: Date): Promise<Map<string
   const scores = new Map<string, number>();
 
   for (const row of records) {
+    // Batch-level treatments carry no individual animal to score.
+    if (!row.animalId) continue;
     const penaltyPerCase =
       row.severity === "SEVERE" ? 0.2 : row.severity === "MODERATE" ? 0.1 : 0.05;
     const categoryMultiplier = row.category === "REPRODUCTIVE" ? 2 : 1;
-    const current = scores.get(row.pigId) ?? 1;
+    const current = scores.get(row.animalId) ?? 1;
     scores.set(
-      row.pigId,
+      row.animalId,
       current - penaltyPerCase * categoryMultiplier * row._count._all
     );
   }
 
-  for (const [pigId, score] of scores) {
-    scores.set(pigId, Math.max(0, score));
+  for (const [animalId, score] of scores) {
+    scores.set(animalId, Math.max(0, score));
   }
 
   return scores;

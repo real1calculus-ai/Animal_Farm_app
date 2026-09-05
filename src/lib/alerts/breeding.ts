@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { addDays, daysBetween, formatDate } from "@/lib/format";
 import type { FarmSettings } from "@prisma/client";
-import { pigLabel, type Alert } from "@/lib/alerts/types";
+import { animalLabel, type Alert } from "@/lib/alerts/types";
 
 /**
  * Breeding-calendar alerts. Every threshold reads from FarmSettings — the
@@ -33,7 +33,7 @@ export async function breedingAlerts(farmId: string, settings: FarmSettings, now
         key: `overdue-farrowing:${record.id}`,
         severity: "CRITICAL",
         title: "Farrowing overdue",
-        detail: `Sow ${pigLabel(record.dam)} is ${overdueBy} day${overdueBy === 1 ? "" : "s"} past her expected farrowing date of ${formatDate(record.expectedFarrowingDate)}.`,
+        detail: `Sow ${animalLabel(record.dam)} is ${overdueBy} day${overdueBy === 1 ? "" : "s"} past her expected farrowing date of ${formatDate(record.expectedFarrowingDate)}.`,
         href: `/breeding/${record.id}`,
         family: "BREEDING",
       });
@@ -46,7 +46,7 @@ export async function breedingAlerts(farmId: string, settings: FarmSettings, now
         key: `farrowing-due:${record.id}`,
         severity: "WARNING",
         title: "Farrowing due this week",
-        detail: `Sow ${pigLabel(record.dam)} is due to farrow ${dueIn === 0 ? "today" : `in ${dueIn} day${dueIn === 1 ? "" : "s"}`} (${formatDate(record.expectedFarrowingDate)}). Move her to a farrowing pen.`,
+        detail: `Sow ${animalLabel(record.dam)} is due to farrow ${dueIn === 0 ? "today" : `in ${dueIn} day${dueIn === 1 ? "" : "s"}`} (${formatDate(record.expectedFarrowingDate)}). Move her to a farrowing pen.`,
         href: `/breeding/${record.id}`,
         family: "BREEDING",
       });
@@ -61,7 +61,7 @@ export async function breedingAlerts(farmId: string, settings: FarmSettings, now
         key: `unconfirmed-pregnancy:${record.id}`,
         severity: "WARNING",
         title: "Pregnancy unconfirmed",
-        detail: `Sow ${pigLabel(record.dam)} was bred ${sinceBreeding} days ago and is still unconfirmed — past the ${settings.estrusCycleDays}-day cycle at which a return to heat would have shown.`,
+        detail: `Sow ${animalLabel(record.dam)} was bred ${sinceBreeding} days ago and is still unconfirmed — past the ${settings.estrusCycleDays}-day cycle at which a return to heat would have shown.`,
         href: `/breeding/${record.id}`,
         family: "BREEDING",
       });
@@ -72,7 +72,7 @@ export async function breedingAlerts(farmId: string, settings: FarmSettings, now
   // sow's worth of feed with no litters against it.
   const giltCutoff = addDays(now, -settings.minBreedingAgeDaysFemale);
 
-  const readyGilts = await prisma.pig.findMany({
+  const readyGilts = await prisma.animal.findMany({
     where: {
       farmId,
       sex: "FEMALE",
@@ -94,7 +94,7 @@ export async function breedingAlerts(farmId: string, settings: FarmSettings, now
       key: `gilt-ready:${gilt.id}`,
       severity: "INFO",
       title: "Gilt ready to breed",
-      detail: `${pigLabel(gilt)} is ${ageDays} days old${gilt.currentWeightKg ? ` and ${gilt.currentWeightKg} kg` : ""} and has never been bred.`,
+      detail: `${animalLabel(gilt)} is ${ageDays} days old${gilt.currentWeightKg ? ` and ${gilt.currentWeightKg} kg` : ""} and has never been bred.`,
       href: `/breeding/match-finder?damId=${gilt.id}`,
       family: "BREEDING",
     });
@@ -103,7 +103,7 @@ export async function breedingAlerts(farmId: string, settings: FarmSettings, now
   // Sows not seen in heat for well over a cycle, and not currently pregnant.
   const staleHeat = addDays(now, -settings.estrusCycleDays * 2);
 
-  const notCycling = await prisma.pig.findMany({
+  const notCycling = await prisma.animal.findMany({
     where: {
       farmId,
       sex: "FEMALE",
@@ -122,7 +122,7 @@ export async function breedingAlerts(farmId: string, settings: FarmSettings, now
       key: `not-cycling:${sow.id}`,
       severity: "WARNING",
       title: "Sow not cycling",
-      detail: `${pigLabel(sow)} is open and has not been recorded in heat for over ${settings.estrusCycleDays * 2} days — worth a fertility check.`,
+      detail: `${animalLabel(sow)} is open and has not been recorded in heat for over ${settings.estrusCycleDays * 2} days — worth a fertility check.`,
       href: `/breeding/estrus`,
       family: "BREEDING",
     });

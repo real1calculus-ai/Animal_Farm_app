@@ -14,7 +14,7 @@ import { prisma } from "@/lib/prisma";
  * The API is deliberately split into a pure layer (exported so it can be unit
  * tested and reused over already-loaded rows) and a database layer whose
  * guard function throws. The finance / sales module MUST call
- * `assertPigsMayBeSold()` inside the same transaction that records a sale or
+ * `assertAnimalsMayBeSold()` inside the same transaction that records a sale or
  * slaughter — see the note on that function. A boolean that a caller can
  * forget to read is exactly the misuse this shape is trying to prevent.
  */
@@ -51,54 +51,55 @@ import {
  * here scopes through the parent record.
  */
 async function loadMedications(
-  pigIds: string[],
+  animalIds: string[],
   farmId: string
 ): Promise<Map<string, WithdrawalMedication[]>> {
-  const byPig = new Map<string, WithdrawalMedication[]>();
-  for (const id of pigIds) byPig.set(id, []);
-  if (pigIds.length === 0) return byPig;
+  const byAnimal = new Map<string, WithdrawalMedication[]>();
+  for (const id of animalIds) byAnimal.set(id, []);
+  if (animalIds.length === 0) return byAnimal;
 
   const rows = await prisma.medication.findMany({
     where: {
       withdrawalDays: { gt: 0 },
-      healthRecord: { farmId, pigId: { in: pigIds } },
+      healthRecord: { farmId, animalId: { in: animalIds } },
     },
-    select: { ...WITHDRAWAL_MEDICATION_SELECT, healthRecord: { select: { pigId: true } } },
+    select: { ...WITHDRAWAL_MEDICATION_SELECT, healthRecord: { select: { animalId: true } } },
   });
 
   for (const row of rows) {
-    const list = byPig.get(row.healthRecord.pigId);
+    if (!row.healthRecord.animalId) continue;
+    const list = byAnimal.get(row.healthRecord.animalId);
     if (list) list.push(row);
   }
-  return byPig;
+  return byAnimal;
 }
 
 /** Withdrawal status for one animal. */
 export async function getWithdrawalStatus(
-  pigId: string,
+  animalId: string,
   farmId: string,
   asOf: Date = new Date()
 ): Promise<WithdrawalStatus> {
-  const byPig = await loadMedications([pigId], farmId);
-  return computeWithdrawalStatus(byPig.get(pigId) ?? [], asOf);
+  const byAnimal = await loadMedications([animalId], farmId);
+  return computeWithdrawalStatus(byAnimal.get(animalId) ?? [], asOf);
 }
 
 /** Withdrawal status for many animals in one round trip. */
 export async function getWithdrawalStatuses(
-  pigIds: string[],
+  animalIds: string[],
   farmId: string,
   asOf: Date = new Date()
 ): Promise<Map<string, WithdrawalStatus>> {
-  const byPig = await loadMedications(pigIds, farmId);
+  const byAnimal = await loadMedications(animalIds, farmId);
   const result = new Map<string, WithdrawalStatus>();
-  for (const [pigId, medications] of byPig) {
-    result.set(pigId, computeWithdrawalStatus(medications, asOf));
+  for (const [animalId, medications] of byAnimal) {
+    result.set(animalId, computeWithdrawalStatus(medications, asOf));
   }
   return result;
 }
 
 export type SaleEligibility = {
-  pigId: string;
+  animalId: string;
   tagNumber: string;
   allowed: boolean;
   /** Operator-facing explanation. Null when the animal is clear. */
@@ -109,42 +110,42 @@ export type SaleEligibility = {
 /**
  * Non-throwing form: use it to render a warning, disable a checkbox, or grey
  * an animal out of a sale picker. It is NOT the enforcement point — the
- * enforcement point is `assertPigsMayBeSold`, because a check whose result a
+ * enforcement point is `assertAnimalsMayBeSold`, because a check whose result a
  * caller can ignore is not a control.
  *
  * `saleDate` defaults to now; pass the intended date when pre-booking a sale
  * so a future-dated sale is judged against the date it will actually happen.
  */
-export async function checkPigsSaleEligibility(
-  pigIds: string[],
+export async function checkAnimalsSaleEligibility(
+  animalIds: string[],
   farmId: string,
   options: { saleDate?: Date } = {}
 ): Promise<SaleEligibility[]> {
   const saleDate = options.saleDate ?? new Date();
-  const unique = [...new Set(pigIds)];
+  const unique = [...new Set(animalIds)];
 
-  const pigs = await prisma.pig.findMany({
+  const animals = await prisma.animal.findMany({
     where: { id: { in: unique }, farmId },
     select: { id: true, tagNumber: true },
   });
   const statuses = await getWithdrawalStatuses(
-    pigs.map((p) => p.id),
+    animals.map((p) => p.id),
     farmId,
     saleDate
   );
 
-  return pigs.map((pig) => {
-    const status = statuses.get(pig.id) ?? {
+  return animals.map((animal) => {
+    const status = statuses.get(animal.id) ?? {
       inWithdrawal: false,
       clearanceDate: null,
       daysRemaining: 0,
       blockingMedications: [],
     };
     return {
-      pigId: pig.id,
-      tagNumber: pig.tagNumber,
+      animalId: animal.id,
+      tagNumber: animal.tagNumber,
       allowed: !status.inWithdrawal,
-      reason: status.inWithdrawal ? describeBlock(pig.tagNumber, status) : null,
+      reason: status.inWithdrawal ? describeBlock(animal.tagNumber, status) : null,
       status,
     };
   });
@@ -158,7 +159,7 @@ export async function checkPigsSaleEligibility(
  *
  * ```ts
  * await prisma.$transaction(async () => {
- *   await assertPigsMayBeSold(pigIds, farmId, { saleDate });
+ *   await assertAnimalsMayBeSold(animalIds, farmId, { saleDate });
  *   await prisma.animalSale.create({ ... });
  * });
  * ```
@@ -173,14 +174,14 @@ export async function checkPigsSaleEligibility(
  * or retiring a breeding animal, is not a food-chain event and does not go
  * through here.
  */
-export async function assertPigsMayBeSold(
-  pigIds: string[],
+export async function assertAnimalsMayBeSold(
+  animalIds: string[],
   farmId: string,
   options: { saleDate?: Date } = {}
 ): Promise<void> {
-  if (pigIds.length === 0) return;
+  if (animalIds.length === 0) return;
 
-  const results = await checkPigsSaleEligibility(pigIds, farmId, options);
+  const results = await checkAnimalsSaleEligibility(animalIds, farmId, options);
   const blocked = results.filter((r) => !r.allowed);
   if (blocked.length === 0) return;
 
@@ -193,13 +194,13 @@ export async function assertPigsMayBeSold(
   );
 }
 
-/** Single-animal convenience wrapper around {@link assertPigsMayBeSold}. */
-export async function assertPigMayBeSold(
-  pigId: string,
+/** Single-animal convenience wrapper around {@link assertAnimalsMayBeSold}. */
+export async function assertAnimalMayBeSold(
+  animalId: string,
   farmId: string,
   options: { saleDate?: Date } = {}
 ): Promise<void> {
-  return assertPigsMayBeSold([pigId], farmId, options);
+  return assertAnimalsMayBeSold([animalId], farmId, options);
 }
 
 function describeBlock(tagNumber: string, status: WithdrawalStatus): string {
@@ -208,7 +209,7 @@ function describeBlock(tagNumber: string, status: WithdrawalStatus): string {
   const when = clearance
     ? clearance.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
     : "an unknown date";
-  return `Pig ${tagNumber} is within a medication withdrawal period (${drugs}) and cannot be sold or slaughtered until ${when} (${status.daysRemaining} day${
+  return `Animal ${tagNumber} is within a medication withdrawal period (${drugs}) and cannot be sold or slaughtered until ${when} (${status.daysRemaining} day${
     status.daysRemaining === 1 ? "" : "s"
   } remaining).`;
 }

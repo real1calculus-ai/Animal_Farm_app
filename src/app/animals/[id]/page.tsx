@@ -292,7 +292,7 @@ export default async function AnimalDetailPage({ params }: PageProps<"/animals/[
             title="Record a weigh-in"
             description="Writes the weight record and updates the animal's current weight together."
           >
-            <LogWeightForm pigId={animal.id} action={logWeight} defaultDate={today} />
+            <LogWeightForm animalId={animal.id} action={logWeight} defaultDate={today} />
           </Section>
 
           <Section
@@ -300,7 +300,7 @@ export default async function AnimalDetailPage({ params }: PageProps<"/animals/[
             description="Refused for deceased animals, and for a destination pen that is already full."
           >
             <MovePenForm
-              pigId={animal.id}
+              animalId={animal.id}
               currentPenId={animal.penId}
               action={movePen}
               pens={pens}

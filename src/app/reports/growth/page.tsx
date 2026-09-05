@@ -121,9 +121,9 @@ export default async function GrowthReportPage({ searchParams }: PageProps<"/rep
               </Thead>
               <Tbody>
                 {slow.map((row) => (
-                  <Tr key={row.pigId}>
+                  <Tr key={row.animalId}>
                     <Td>
-                      <Link href={`/animals/${row.pigId}`} className="underline underline-offset-2">
+                      <Link href={`/animals/${row.animalId}`} className="underline underline-offset-2">
                         {row.tagNumber}
                       </Link>
                     </Td>

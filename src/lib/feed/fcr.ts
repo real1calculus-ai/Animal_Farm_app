@@ -138,7 +138,7 @@ export function summarisePerformance(
 }
 
 /**
- * Reference growth curve for a commercial crossbred pig: age in days against
+ * Reference growth curve for a commercial crossbred animal: age in days against
  * expected liveweight in kg. Interpolated linearly between points, and
  * extended past the last point at the final slope.
  *
@@ -211,7 +211,7 @@ function dayKey(date: Date): string {
 
 /**
  * Collapses feeding records into one row per day. Per-animal intake is
- * carried alongside the total because a pen's total drops when pigs are sold
+ * carried alongside the total because a pen's total drops when animals are sold
  * out of it, and that is not the drop anyone wants to be alerted about.
  */
 export function dailyIntakeSeries(records: readonly IntakeRecord[]): DailyIntake[] {
@@ -264,7 +264,7 @@ export const CONSUMPTION_DROP_THRESHOLD = 0.2;
  * A pen going off its feed is usually the first visible sign of illness, a
  * day or two before anything else shows — which is most of what this module
  * is for. Compared per animal so a sale out of the pen doesn't read as sick
- * pigs, and it needs a full baseline before it will fire, because a new pen
+ * animals, and it needs a full baseline before it will fire, because a new pen
  * with three days of history would otherwise flag constantly.
  */
 export function detectConsumptionDrop(

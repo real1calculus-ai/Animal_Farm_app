@@ -20,7 +20,7 @@ import {
  *
  * The batch and its ledger entry are written in ONE `prisma.$transaction`, and
  * that is the whole point of this action. Feed is the largest recurring cost on
- * a pig farm; if the ledger row were written separately — or, worse, left for
+ * a animal farm; if the ledger row were written separately — or, worse, left for
  * the finance module to re-derive by summing batches — then any failure between
  * the two writes produces stock that exists but was never paid for, and the P&L
  * silently under-reports. The finance module reads `FinancialTransaction` and

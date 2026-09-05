@@ -1,7 +1,7 @@
 import type { HealthCategory, HealthRecordType, Severity } from "@prisma/client";
 
 /**
- * Curated list of the conditions a pig unit actually sees, grouped by
+ * Curated list of the conditions a animal unit actually sees, grouped by
  * `HealthCategory`.
  *
  * Two jobs, and the second is the important one:
@@ -206,11 +206,11 @@ export const CONDITIONS: readonly Condition[] = [
     aliases: ["wound", "laceration", "cut"],
   },
   {
-    diagnosis: "Greasy pig disease",
+    diagnosis: "Greasy animal disease",
     category: "SKIN",
     recordType: "ILLNESS",
     typicalSeverity: "MODERATE",
-    signs: ["Greasy brown skin exudate", "Spreading dark patches", "Depression", "Dehydration in piglets"],
+    signs: ["Greasy brown skin exudate", "Spreading dark patches", "Depression", "Dehydration in offspring"],
     treatments: ["Antibiotic course per veterinary advice", "Topical antiseptic wash", "Clip needle teeth, reduce fighting"],
     antibioticLikely: true,
     contagious: true,
@@ -244,7 +244,7 @@ export const CONDITIONS: readonly Condition[] = [
     category: "PARASITIC",
     recordType: "ILLNESS",
     typicalSeverity: "MODERATE",
-    signs: ["Pasty yellow scour in piglets 7-14 days old", "Poor growth", "Unresponsive to antibiotics"],
+    signs: ["Pasty yellow scour in offspring 7-14 days old", "Poor growth", "Unresponsive to antibiotics"],
     treatments: ["Anticoccidial per veterinary advice", "Steam clean farrowing crates between batches", "Improve bedding hygiene"],
     antibioticLikely: false,
     contagious: true,
@@ -257,7 +257,7 @@ export const CONDITIONS: readonly Condition[] = [
     recordType: "ILLNESS",
     typicalSeverity: "MODERATE",
     signs: ["Pale skin and mucous membranes", "Lethargy", "Poor growth", "Laboured breathing on exertion"],
-    treatments: ["Iron injection", "Check the routine piglet iron protocol", "Rule out ulcer or heavy parasite burden"],
+    treatments: ["Iron injection", "Check the routine offspring iron protocol", "Rule out ulcer or heavy parasite burden"],
     antibioticLikely: false,
     contagious: false,
     aliases: ["anemia"],
@@ -277,7 +277,7 @@ export const CONDITIONS: readonly Condition[] = [
     category: "METABOLIC",
     recordType: "ILLNESS",
     typicalSeverity: "MODERATE",
-    signs: ["Panting", "Lying apart on cool surfaces", "Reduced feed intake", "Sudden death in heavy pigs"],
+    signs: ["Panting", "Lying apart on cool surfaces", "Reduced feed intake", "Sudden death in heavy animals"],
     treatments: ["Wet the animals and increase airflow", "Ensure abundant cool water", "Reduce stocking density", "Feed in the cool of the day"],
     antibioticLikely: false,
     contagious: false,
@@ -289,7 +289,7 @@ export const CONDITIONS: readonly Condition[] = [
     category: "REPRODUCTIVE",
     recordType: "ILLNESS",
     typicalSeverity: "SEVERE",
-    signs: ["Hard hot painful udder", "Fever", "Sow off feed", "Piglets hungry and squealing"],
+    signs: ["Hard hot painful udder", "Fever", "Sow off feed", "Offspring hungry and squealing"],
     treatments: ["Antibiotic course per veterinary advice", "Anti-inflammatory", "Strip affected glands", "Supplement the litter"],
     antibioticLikely: true,
     contagious: false,
@@ -341,7 +341,7 @@ export const CONDITIONS: readonly Condition[] = [
     category: "REPRODUCTIVE",
     recordType: "EXAM",
     typicalSeverity: "MODERATE",
-    signs: ["Piglets born dead", "Meconium staining", "Prolonged farrowing"],
+    signs: ["Offspring born dead", "Meconium staining", "Prolonged farrowing"],
     treatments: ["Review farrowing supervision", "Check sow body condition and gestation feeding", "Submit for diagnosis if clustered"],
     antibioticLikely: false,
     contagious: false,

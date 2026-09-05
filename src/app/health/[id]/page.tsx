@@ -33,17 +33,26 @@ export default async function HealthRecordPage({ params }: PageProps<"/health/[i
   const record = await getHealthRecord(farmId, id);
   if (!record) notFound();
 
+  // A health record belongs to either a named animal or a whole batch. This
+  // screen is the individual-animal view; batch treatments are read on the
+  // batch itself, where the subject is 500 birds rather than one. Nothing can
+  // create a batch record yet, so this is currently unreachable — it exists so
+  // that when the batch module lands, the failure is a redirect rather than a
+  // crash on a null animal.
+  const subject = record.animal;
+  if (!subject) notFound();
+
   const canEdit = HEALTH_ROLES.includes(user.role);
   // Withdrawal is a property of the animal, not of this one record, so the
   // banner is computed from every medication the animal has ever had.
   const withdrawal = computeWithdrawalStatus(record.medications);
 
   const animal: AnimalChoice = {
-    id: record.pig.id,
-    tagNumber: record.pig.tagNumber,
-    name: record.pig.name,
-    dateOfBirth: toDateInputValue(record.pig.dateOfBirth),
-    penName: record.pig.pen?.name ?? null,
+    id: subject.id,
+    tagNumber: subject.tagNumber,
+    name: subject.name,
+    dateOfBirth: toDateInputValue(subject.dateOfBirth),
+    penName: subject.pen?.name ?? null,
   };
 
   return (
@@ -52,20 +61,20 @@ export default async function HealthRecordPage({ params }: PageProps<"/health/[i
         title={record.diagnosis}
         description={`${HEALTH_RECORD_TYPE_LABELS[record.recordType]} recorded on ${formatDate(
           record.recordedAt
-        )} for pig ${record.pig.tagNumber}.`}
+        )} for animal ${subject.tagNumber}.`}
         actions={
           <>
             <ButtonLink href="/health" variant="secondary">
               Back to records
             </ButtonLink>
-            <ButtonLink href={`/animals/${record.pig.id}`} variant="secondary">
+            <ButtonLink href={`/animals/${subject.id}`} variant="secondary">
               Animal profile
             </ButtonLink>
           </>
         }
       />
 
-      <WithdrawalBanner status={withdrawal} tagNumber={record.pig.tagNumber} />
+      <WithdrawalBanner status={withdrawal} tagNumber={subject.tagNumber} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
@@ -116,20 +125,20 @@ export default async function HealthRecordPage({ params }: PageProps<"/health/[i
           <dl className="grid grid-cols-1 gap-y-3">
             <Detail label="Tag">
               <Link
-                href={`/animals/${record.pig.id}`}
+                href={`/animals/${subject.id}`}
                 className="font-medium underline underline-offset-2"
               >
-                {record.pig.tagNumber}
+                {subject.tagNumber}
               </Link>
-              {record.pig.name ? ` — ${record.pig.name}` : ""}
+              {subject.name ? ` — ${subject.name}` : ""}
             </Detail>
-            <Detail label="Breed">{record.pig.breed}</Detail>
-            <Detail label="Sex">{SEX_LABELS[record.pig.sex]}</Detail>
-            <Detail label="Status">{PIG_STATUS_LABELS[record.pig.status]}</Detail>
+            <Detail label="Breed">{subject.breed}</Detail>
+            <Detail label="Sex">{SEX_LABELS[subject.sex]}</Detail>
+            <Detail label="Status">{PIG_STATUS_LABELS[subject.status]}</Detail>
             <Detail label="Age at the event">
-              {formatAge(record.pig.dateOfBirth, record.recordedAt)}
+              {formatAge(subject.dateOfBirth, record.recordedAt)}
             </Detail>
-            <Detail label="Pen">{record.pig.pen?.name ?? "Unassigned"}</Detail>
+            <Detail label="Pen">{subject.pen?.name ?? "Unassigned"}</Detail>
           </dl>
         </Card>
       </div>
@@ -154,7 +163,7 @@ export default async function HealthRecordPage({ params }: PageProps<"/health/[i
                 cancelHref={`/health/${record.id}`}
                 initial={{
                   id: record.id,
-                  pigId: record.pig.id,
+                  animalId: subject.id,
                   recordedAt: toDateInputValue(record.recordedAt),
                   recordType: record.recordType,
                   category: record.category,

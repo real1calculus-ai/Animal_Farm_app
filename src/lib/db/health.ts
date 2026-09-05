@@ -32,11 +32,11 @@ import {
  * Every read the health module performs, in one place.
  *
  * Two reasons this is not inlined into the pages: the animal, breeding and
- * finance screens all want `getPigHealthSummary`, and a health query written
+ * finance screens all want `getAnimalHealthSummary`, and a health query written
  * inline is a health query written without `farmId` sooner or later. Every
  * function here takes `farmId` as its first argument and puts it in the where
  * clause — including the vaccination queries, which have to reach it through
- * `pig.farmId` because `VaccinationRecord` carries no tenant column of its own.
+ * `animal.farmId` because `VaccinationRecord` carries no tenant column of its own.
  */
 
 const DEFAULT_LIST_LIMIT = 200;
@@ -51,7 +51,7 @@ export type HealthRecordFilters = {
   outcome?: HealthOutcome | null;
   recordType?: HealthRecordType | null;
   penId?: string | null;
-  pigId?: string | null;
+  animalId?: string | null;
   from?: Date | null;
   to?: Date | null;
   /** Free text over the diagnosis. */
@@ -65,8 +65,8 @@ function buildWhere(farmId: string, filters: HealthRecordFilters): Prisma.Health
   if (filters.severity) where.severity = filters.severity;
   if (filters.outcome) where.outcome = filters.outcome;
   if (filters.recordType) where.recordType = filters.recordType;
-  if (filters.pigId) where.pigId = filters.pigId;
-  if (filters.penId) where.pig = { penId: filters.penId };
+  if (filters.animalId) where.animalId = filters.animalId;
+  if (filters.penId) where.animal = { penId: filters.penId };
   if (filters.search) where.diagnosis = { contains: filters.search, mode: "insensitive" };
 
   if (filters.from || filters.to) {
@@ -90,7 +90,7 @@ const LIST_SELECT = {
   outcome: true,
   resolvedAt: true,
   costCents: true,
-  pig: {
+  animal: {
     select: {
       id: true,
       tagNumber: true,
@@ -127,7 +127,7 @@ export async function countHealthRecords(
 const DETAIL_INCLUDE = {
   medications: { orderBy: { startDate: "asc" } },
   createdBy: { select: { id: true, name: true } },
-  pig: {
+  animal: {
     select: {
       id: true,
       tagNumber: true,
@@ -157,8 +157,8 @@ export async function getHealthRecord(
 // Cross-module summary
 // ---------------------------------------------------------------------------
 
-export type PigHealthSummary = {
-  pigId: string;
+export type AnimalHealthSummary = {
+  animalId: string;
   totalRecords: number;
   ongoingCount: number;
   lastRecordAt: Date | null;
@@ -175,30 +175,30 @@ export type PigHealthSummary = {
  * screens and the sale flow, so it is deliberately cheap and returns plain
  * data rather than Prisma rows.
  */
-export async function getPigHealthSummary(
+export async function getAnimalHealthSummary(
   farmId: string,
-  pigId: string,
+  animalId: string,
   asOf: Date = new Date()
-): Promise<PigHealthSummary> {
+): Promise<AnimalHealthSummary> {
   const [records, vaccinations, medications] = await Promise.all([
     prisma.healthRecord.findMany({
-      where: { farmId, pigId },
+      where: { farmId, animalId },
       select: { recordedAt: true, diagnosis: true, outcome: true, costCents: true },
       orderBy: { recordedAt: "desc" },
     }),
     prisma.vaccinationRecord.findMany({
-      where: { pigId, pig: { farmId } },
+      where: { animalId, animal: { farmId } },
       select: { administeredAt: true, nextDueDate: true },
       orderBy: { administeredAt: "desc" },
     }),
     prisma.medication.findMany({
-      where: { healthRecord: { farmId, pigId } },
+      where: { healthRecord: { farmId, animalId } },
       select: WITHDRAWAL_MEDICATION_SELECT,
     }),
   ]);
 
   const medicationCost = await prisma.medication.aggregate({
-    where: { healthRecord: { farmId, pigId } },
+    where: { healthRecord: { farmId, animalId } },
     _sum: { costCents: true },
   });
 
@@ -209,7 +209,7 @@ export async function getPigHealthSummary(
     .find((d) => d >= asOf);
 
   return {
-    pigId,
+    animalId,
     totalRecords: records.length,
     ongoingCount: records.filter((r) => r.outcome === "ONGOING").length,
     lastRecordAt: records[0]?.recordedAt ?? null,
@@ -229,9 +229,9 @@ export async function getPigHealthSummary(
 
 export type OngoingTreatment = {
   recordId: string;
-  pigId: string;
+  animalId: string;
   tagNumber: string;
-  pigName: string | null;
+  animalName: string | null;
   penName: string | null;
   diagnosis: string;
   category: HealthCategory;
@@ -245,38 +245,41 @@ export async function getOngoingTreatments(
   asOf: Date = new Date()
 ): Promise<OngoingTreatment[]> {
   const rows = await prisma.healthRecord.findMany({
-    where: { farmId, outcome: "ONGOING", pig: { status: "ACTIVE" } },
+    where: { farmId, outcome: "ONGOING", animal: { status: "ACTIVE" } },
     select: {
       id: true,
       recordedAt: true,
       diagnosis: true,
       category: true,
       severity: true,
-      pig: {
+      animal: {
         select: { id: true, tagNumber: true, name: true, pen: { select: { name: true } } },
       },
     },
     orderBy: [{ severity: "desc" }, { recordedAt: "asc" }],
   });
 
-  return rows.map((row) => ({
+  return rows.flatMap((row) => {
+    if (!row.animal) return [];
+    return [{
     recordId: row.id,
-    pigId: row.pig.id,
-    tagNumber: row.pig.tagNumber,
-    pigName: row.pig.name,
-    penName: row.pig.pen?.name ?? null,
+    animalId: row.animal.id,
+    tagNumber: row.animal.tagNumber,
+    animalName: row.animal.name,
+    penName: row.animal.pen?.name ?? null,
     diagnosis: row.diagnosis,
     category: row.category,
     severity: row.severity,
     recordedAt: row.recordedAt,
     daysOngoing: Math.max(0, daysBetween(row.recordedAt, asOf)),
-  }));
+    }];
+  });
 }
 
 export type AnimalInWithdrawal = {
-  pigId: string;
+  animalId: string;
   tagNumber: string;
-  pigName: string | null;
+  animalName: string | null;
   penName: string | null;
   status: WithdrawalStatus;
 };
@@ -293,13 +296,13 @@ export async function getAnimalsInWithdrawal(
   const medications = await prisma.medication.findMany({
     where: {
       withdrawalDays: { gt: 0 },
-      healthRecord: { farmId, pig: { status: "ACTIVE" } },
+      healthRecord: { farmId, animal: { status: "ACTIVE" } },
     },
     select: {
       ...WITHDRAWAL_MEDICATION_SELECT,
       healthRecord: {
         select: {
-          pig: {
+          animal: {
             select: { id: true, tagNumber: true, name: true, pen: { select: { name: true } } },
           },
         },
@@ -307,27 +310,31 @@ export async function getAnimalsInWithdrawal(
     },
   });
 
-  const byPig = new Map<
+  const byAnimal = new Map<
     string,
-    { pig: { id: string; tagNumber: string; name: string | null; penName: string | null }; meds: WithdrawalMedication[] }
+    { animal: { id: string; tagNumber: string; name: string | null; penName: string | null }; meds: WithdrawalMedication[] }
   >();
 
   for (const row of medications) {
-    const pig = row.healthRecord.pig;
-    const entry = byPig.get(pig.id) ?? {
-      pig: { id: pig.id, tagNumber: pig.tagNumber, name: pig.name, penName: pig.pen?.name ?? null },
+      // A batch-level treatment has no individual animal. These aggregations
+      // are per-animal by definition; flock health is reported on the batch
+      // screens instead of being flattened into a headcount of one.
+    const animal = row.healthRecord.animal;
+    if (!animal) continue;
+    const entry = byAnimal.get(animal.id) ?? {
+      animal: { id: animal.id, tagNumber: animal.tagNumber, name: animal.name, penName: animal.pen?.name ?? null },
       meds: [],
     };
     entry.meds.push(row);
-    byPig.set(pig.id, entry);
+    byAnimal.set(animal.id, entry);
   }
 
-  return [...byPig.values()]
+  return [...byAnimal.values()]
     .map((entry) => ({
-      pigId: entry.pig.id,
-      tagNumber: entry.pig.tagNumber,
-      pigName: entry.pig.name,
-      penName: entry.pig.penName,
+      animalId: entry.animal.id,
+      tagNumber: entry.animal.tagNumber,
+      animalName: entry.animal.name,
+      penName: entry.animal.penName,
       status: computeWithdrawalStatus(entry.meds, asOf),
     }))
     .filter((row) => row.status.inWithdrawal)
@@ -358,7 +365,7 @@ export type MorbidityReport = {
 
 /** % of the ACTIVE herd carrying at least one ONGOING health record. */
 export async function getMorbidity(farmId: string): Promise<MorbidityReport> {
-  const pigs = await prisma.pig.findMany({
+  const animals = await prisma.animal.findMany({
     where: { farmId, status: "ACTIVE" },
     select: {
       id: true,
@@ -370,14 +377,14 @@ export async function getMorbidity(farmId: string): Promise<MorbidityReport> {
   const pens = new Map<string, MorbidityByPen>();
   let sickCount = 0;
 
-  for (const pig of pigs) {
-    const sick = pig.healthRecords.length > 0;
+  for (const animal of animals) {
+    const sick = animal.healthRecords.length > 0;
     if (sick) sickCount += 1;
 
-    const key = pig.pen?.id ?? "__none__";
+    const key = animal.pen?.id ?? "__none__";
     const entry = pens.get(key) ?? {
-      penId: pig.pen?.id ?? null,
-      penName: pig.pen?.name ?? "Unassigned",
+      penId: animal.pen?.id ?? null,
+      penName: animal.pen?.name ?? "Unassigned",
       herdCount: 0,
       sickCount: 0,
       rate: 0,
@@ -392,15 +399,15 @@ export async function getMorbidity(farmId: string): Promise<MorbidityReport> {
     .sort((a, b) => b.rate - a.rate || a.penName.localeCompare(b.penName));
 
   return {
-    herdCount: pigs.length,
+    herdCount: animals.length,
     sickCount,
-    rate: pigs.length > 0 ? sickCount / pigs.length : 0,
+    rate: animals.length > 0 ? sickCount / animals.length : 0,
     byPen,
   };
 }
 
 export type MortalityEvent = {
-  pigId: string;
+  animalId: string;
   tagNumber: string;
   penName: string | null;
   date: Date;
@@ -427,7 +434,7 @@ export async function getMortalityReport(
 ): Promise<MortalityReport> {
   const since = addDays(asOf, -days);
 
-  const [deathRecords, deceasedPigs] = await Promise.all([
+  const [deathRecords, deceasedAnimals] = await Promise.all([
     prisma.healthRecord.findMany({
       where: { farmId, outcome: "DEATH", recordedAt: { gte: since } },
       select: {
@@ -435,11 +442,11 @@ export async function getMortalityReport(
         recordedAt: true,
         diagnosis: true,
         category: true,
-        pig: { select: { id: true, tagNumber: true, pen: { select: { name: true } } } },
+        animal: { select: { id: true, tagNumber: true, pen: { select: { name: true } } } },
       },
       orderBy: { recordedAt: "desc" },
     }),
-    prisma.pig.findMany({
+    prisma.animal.findMany({
       where: {
         farmId,
         status: "DECEASED",
@@ -454,24 +461,28 @@ export async function getMortalityReport(
     }),
   ]);
 
-  const events: MortalityEvent[] = deathRecords.map((row) => ({
-    pigId: row.pig.id,
-    tagNumber: row.pig.tagNumber,
-    penName: row.pig.pen?.name ?? null,
-    date: row.recordedAt,
-    diagnosis: row.diagnosis,
-    category: row.category,
-    healthRecordId: row.id,
-  }));
+  const events: MortalityEvent[] = deathRecords.flatMap((row) =>
+    row.animal
+      ? [{
+          animalId: row.animal.id,
+          tagNumber: row.animal.tagNumber,
+          penName: row.animal.pen?.name ?? null,
+          date: row.recordedAt,
+          diagnosis: row.diagnosis,
+          category: row.category,
+          healthRecordId: row.id,
+        }]
+      : []
+  );
 
-  const seen = new Set(events.map((e) => e.pigId));
-  for (const pig of deceasedPigs) {
-    if (seen.has(pig.id) || !pig.dateExit) continue;
+  const seen = new Set(events.map((e) => e.animalId));
+  for (const animal of deceasedAnimals) {
+    if (seen.has(animal.id) || !animal.dateExit) continue;
     events.push({
-      pigId: pig.id,
-      tagNumber: pig.tagNumber,
-      penName: pig.pen?.name ?? null,
-      date: pig.dateExit,
+      animalId: animal.id,
+      tagNumber: animal.tagNumber,
+      penName: animal.pen?.name ?? null,
+      date: animal.dateExit,
       diagnosis: null,
       category: null,
       healthRecordId: null,
@@ -519,13 +530,14 @@ export async function getDiseaseTimeline(
 
   const rows = await prisma.healthRecord.findMany({
     where: { farmId, recordedAt: { gte: since }, recordType: { not: "VACCINATION" } },
-    select: { recordedAt: true, diagnosis: true, category: true, pigId: true },
+    select: { recordedAt: true, diagnosis: true, category: true, animalId: true },
   });
 
   const totals = new Map<string, { category: HealthCategory; animals: Set<string> }>();
   for (const row of rows) {
+    if (!row.animalId) continue;
     const entry = totals.get(row.diagnosis) ?? { category: row.category, animals: new Set<string>() };
-    entry.animals.add(row.pigId);
+    entry.animals.add(row.animalId);
     totals.set(row.diagnosis, entry);
   }
 
@@ -545,7 +557,7 @@ export async function getDiseaseTimeline(
       const animals = new Set(
         rows
           .filter((r) => r.diagnosis === diagnosis && r.recordedAt >= start && r.recordedAt < end)
-          .map((r) => r.pigId)
+          .map((r) => r.animalId)
       );
       if (animals.size > maxCount) maxCount = animals.size;
       return animals.size;
@@ -598,7 +610,7 @@ export async function getAntibioticUsage(
       isAntibiotic: true,
       startDate: true,
       costCents: true,
-      healthRecord: { select: { pigId: true } },
+      healthRecord: { select: { animalId: true } },
     },
   });
 
@@ -611,7 +623,7 @@ export async function getAntibioticUsage(
       start,
       label: start.toLocaleDateString("en-GB", { month: "short", year: "2-digit" }),
       courses: inPeriod.length,
-      animals: new Set(inPeriod.map((m) => m.healthRecord.pigId)).size,
+      animals: new Set(inPeriod.map((m) => m.healthRecord.animalId)).size,
       costCents: inPeriod.reduce((sum, m) => sum + m.costCents, 0),
     };
   });
@@ -621,14 +633,14 @@ export async function getAntibioticUsage(
     const name = medication.drugName.trim();
     const entry = byDrug.get(name) ?? { courses: 0, animals: new Set<string>() };
     entry.courses += 1;
-    entry.animals.add(medication.healthRecord.pigId);
+    if (medication.healthRecord.animalId) entry.animals.add(medication.healthRecord.animalId);
     byDrug.set(name, entry);
   }
 
   return {
     points,
     totalCourses: antibiotics.length,
-    totalAnimals: new Set(antibiotics.map((m) => m.healthRecord.pigId)).size,
+    totalAnimals: new Set(antibiotics.map((m) => m.healthRecord.animalId)).size,
     shareOfAllMedications: medications.length > 0 ? antibiotics.length / medications.length : 0,
     topDrugs: [...byDrug.entries()]
       .map(([drugName, entry]) => ({
@@ -663,7 +675,7 @@ export async function getTreatmentCostByCategory(
     select: {
       category: true,
       costCents: true,
-      pigId: true,
+      animalId: true,
       medications: { select: { costCents: true } },
     },
   });
@@ -684,7 +696,7 @@ export async function getTreatmentCostByCategory(
       } as CategoryCost & { animals: Set<string> });
 
     entry.recordCount += 1;
-    entry.animals.add(record.pigId);
+    if (record.animalId) entry.animals.add(record.animalId);
     entry.treatmentCostCents += record.costCents;
     entry.medicationCostCents += record.medications.reduce((sum, m) => sum + m.costCents, 0);
     byCategory.set(record.category, entry);
@@ -729,21 +741,23 @@ export async function getOutbreakReport(
       diagnosis: true,
       category: true,
       recordedAt: true,
-      pig: {
+      animal: {
         select: { id: true, tagNumber: true, pen: { select: { id: true, name: true } } },
       },
     },
   });
 
-  const cases: OutbreakCase[] = rows.map((row) => ({
-    pigId: row.pig.id,
-    tagNumber: row.pig.tagNumber,
+  // Outbreak tracing is about which animals were affected and where they
+  // live; a flock-level record names no individual to trace.
+  const cases: OutbreakCase[] = rows.flatMap((row) => row.animal ? [{
+    animalId: row.animal.id,
+    tagNumber: row.animal.tagNumber,
     diagnosis: row.diagnosis,
     category: row.category,
     recordedAt: row.recordedAt,
-    penId: row.pig.pen?.id ?? null,
-    penName: row.pig.pen?.name ?? null,
-  }));
+    penId: row.animal.pen?.id ?? null,
+    penName: row.animal.pen?.name ?? null,
+  }] : []);
 
   const thresholds = {
     caseThreshold: settings.outbreakCaseThreshold,
@@ -762,7 +776,7 @@ export async function getOutbreakReport(
 // ---------------------------------------------------------------------------
 
 export type VaccinationListFilters = {
-  pigId?: string | null;
+  animalId?: string | null;
   penId?: string | null;
   vaccineName?: string | null;
   lotNumber?: string | null;
@@ -781,7 +795,7 @@ const VACCINATION_SELECT = {
   notes: true,
   protocolItem: { select: { id: true, name: true } },
   createdBy: { select: { id: true, name: true } },
-  pig: {
+  animal: {
     select: { id: true, tagNumber: true, name: true, pen: { select: { id: true, name: true } } },
   },
 } satisfies Prisma.VaccinationRecordSelect;
@@ -796,13 +810,13 @@ export async function listVaccinationRecords(
   limit: number = DEFAULT_LIST_LIMIT
 ): Promise<VaccinationListItem[]> {
   const where: Prisma.VaccinationRecordWhereInput = {
-    pig: {
+    animal: {
       farmId,
       ...(filters.penId ? { penId: filters.penId } : {}),
     },
   };
 
-  if (filters.pigId) where.pigId = filters.pigId;
+  if (filters.animalId) where.animalId = filters.animalId;
   if (filters.vaccineName)
     where.vaccineName = { contains: filters.vaccineName, mode: "insensitive" };
   if (filters.lotNumber) where.lotNumber = { contains: filters.lotNumber, mode: "insensitive" };
@@ -862,9 +876,9 @@ export type VaccinationDueStatus = "OVERDUE" | "DUE" | "UPCOMING";
 
 export type VaccinationObligation = {
   key: string;
-  pigId: string;
+  animalId: string;
   tagNumber: string;
-  pigName: string | null;
+  animalName: string | null;
   penId: string | null;
   penName: string;
   lifeStage: LifeStage;
@@ -907,13 +921,13 @@ export async function getVaccinationObligations(
   farmId: string,
   asOf: Date = new Date()
 ): Promise<VaccinationObligation[]> {
-  const [settings, protocol, parityByPig, pigs] = await Promise.all([
+  const [settings, protocol, parityByAnimal, animals] = await Promise.all([
     getFarmSettings(farmId),
     prisma.vaccinationProtocolItem.findMany({ where: { farmId, isActive: true } }),
     // Parity comes from the animals module so "how many litters has she had"
     // has exactly one definition in the codebase.
     getParityMap(farmId),
-    prisma.pig.findMany({
+    prisma.animal.findMany({
       where: { farmId, status: "ACTIVE" },
       select: {
         id: true,
@@ -938,22 +952,22 @@ export async function getVaccinationObligations(
 
   const obligations: VaccinationObligation[] = [];
 
-  for (const pig of pigs) {
+  for (const animal of animals) {
     const lifeStage = deriveLifeStage({
-      dateOfBirth: pig.dateOfBirth,
-      sex: pig.sex,
-      parity: parityByPig.get(pig.id) ?? 0,
+      dateOfBirth: animal.dateOfBirth,
+      sex: animal.sex,
+      parity: parityByAnimal.get(animal.id) ?? 0,
       weaningAgeDays: settings.weaningAgeDays,
       minBreedingAgeDays:
-        pig.sex === "FEMALE" ? settings.minBreedingAgeDaysFemale : settings.minBreedingAgeDaysMale,
+        animal.sex === "FEMALE" ? settings.minBreedingAgeDaysFemale : settings.minBreedingAgeDaysMale,
       asOf,
     });
-    const age = ageInDays(pig.dateOfBirth, asOf);
+    const age = ageInDays(animal.dateOfBirth, asOf);
 
     for (const item of protocol) {
       if (item.targetStage !== lifeStage) continue;
 
-      const matches = pig.vaccinationRecords.filter(
+      const matches = animal.vaccinationRecords.filter(
         (record) =>
           record.protocolItemId === item.id ||
           (record.protocolItemId === null &&
@@ -962,12 +976,12 @@ export async function getVaccinationObligations(
       const lastAdministeredAt = matches[0]?.administeredAt ?? null;
 
       const base = {
-        key: `${pig.id}:${item.id}`,
-        pigId: pig.id,
-        tagNumber: pig.tagNumber,
-        pigName: pig.name,
-        penId: pig.pen?.id ?? null,
-        penName: pig.pen?.name ?? "Unassigned",
+        key: `${animal.id}:${item.id}`,
+        animalId: animal.id,
+        tagNumber: animal.tagNumber,
+        animalName: animal.name,
+        penId: animal.pen?.id ?? null,
+        penName: animal.pen?.name ?? "Unassigned",
         lifeStage,
         ageDays: age,
         protocolItemId: item.id,
@@ -997,9 +1011,9 @@ export async function getVaccinationObligations(
       }
 
       if (item.ageDaysMin !== null) {
-        const windowStart = addDays(startOfDay(pig.dateOfBirth), item.ageDaysMin);
+        const windowStart = addDays(startOfDay(animal.dateOfBirth), item.ageDaysMin);
         const windowEnd = addDays(
-          startOfDay(pig.dateOfBirth),
+          startOfDay(animal.dateOfBirth),
           item.ageDaysMax ?? item.ageDaysMin
         );
         const required = asOf >= windowStart;
@@ -1119,7 +1133,7 @@ export function summariseCompliance(obligations: readonly VaccinationObligation[
 // Option lists for form selects
 // ---------------------------------------------------------------------------
 
-export type PigOption = {
+export type AnimalOption = {
   id: string;
   tagNumber: string;
   name: string | null;
@@ -1127,11 +1141,11 @@ export type PigOption = {
   penName: string | null;
 };
 
-export async function listPigOptions(
+export async function listAnimalOptions(
   farmId: string,
   { includeInactive = false }: { includeInactive?: boolean } = {}
-): Promise<PigOption[]> {
-  const pigs = await prisma.pig.findMany({
+): Promise<AnimalOption[]> {
+  const animals = await prisma.animal.findMany({
     where: { farmId, ...(includeInactive ? {} : { status: "ACTIVE" }) },
     select: {
       id: true,
@@ -1142,12 +1156,12 @@ export async function listPigOptions(
     },
     orderBy: { tagNumber: "asc" },
   });
-  return pigs.map((pig) => ({
-    id: pig.id,
-    tagNumber: pig.tagNumber,
-    name: pig.name,
-    dateOfBirth: pig.dateOfBirth,
-    penName: pig.pen?.name ?? null,
+  return animals.map((animal) => ({
+    id: animal.id,
+    tagNumber: animal.tagNumber,
+    name: animal.name,
+    dateOfBirth: animal.dateOfBirth,
+    penName: animal.pen?.name ?? null,
   }));
 }
 
@@ -1159,11 +1173,11 @@ export async function listPenOptions(farmId: string): Promise<PenOption[]> {
     select: {
       id: true,
       name: true,
-      _count: { select: { pigs: { where: { status: "ACTIVE" } } } },
+      _count: { select: { animals: { where: { status: "ACTIVE" } } } },
     },
     orderBy: { name: "asc" },
   });
-  return pens.map((pen) => ({ id: pen.id, name: pen.name, activeCount: pen._count.pigs }));
+  return pens.map((pen) => ({ id: pen.id, name: pen.name, activeCount: pen._count.animals }));
 }
 
 // ---------------------------------------------------------------------------

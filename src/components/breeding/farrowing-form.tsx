@@ -13,7 +13,7 @@ import { recordFarrowing } from "@/app/breeding/actions";
 /** Nobody farrows more than this; the cap stops a typo generating 900 rows. */
 const MAX_PIGLETS = 30;
 
-type PigletRow = {
+type OffspringRow = {
   tagNumber: string;
   sex: "MALE" | "FEMALE";
   birthWeightKg: string;
@@ -21,11 +21,11 @@ type PigletRow = {
 };
 
 /**
- * Farrowing entry: the litter *and* one animal per live piglet, in one form.
+ * Farrowing entry: the litter *and* one animal per live offspring, in one form.
  *
- * The number born alive drives the piglet rows directly, because those two
+ * The number born alive drives the offspring rows directly, because those two
  * numbers must agree — a litter recorded as 11 born alive with 9 registered
- * piglets leaves two animals that exist in the barn and not in the pedigree.
+ * offspring leaves two animals that exist in the barn and not in the pedigree.
  * Tag numbers are pre-filled from a farm-wide scheme and every one of them is
  * editable, since plenty of farms number their animals from a book instead.
  */
@@ -34,16 +34,16 @@ export function FarrowingForm({
   suggestedTags,
   tagPrefix,
   defaultFarrowingDate,
-  expectedPigletCount,
+  expectedOffspringCount,
 }: {
   breedingRecordId: string;
   suggestedTags: string[];
   tagPrefix: string;
   defaultFarrowingDate: string;
-  expectedPigletCount: number | null;
+  expectedOffspringCount: number | null;
 }) {
   const [bornAlive, setBornAlive] = useState(0);
-  const [piglets, setPiglets] = useState<PigletRow[]>([]);
+  const [offspring, setOffspring] = useState<OffspringRow[]>([]);
 
   function suggestTag(index: number): string {
     return suggestedTags[index] ?? `${tagPrefix}${index + 1}`;
@@ -52,7 +52,7 @@ export function FarrowingForm({
   function resize(next: number): void {
     const count = Math.max(0, Math.min(MAX_PIGLETS, Number.isFinite(next) ? next : 0));
     setBornAlive(count);
-    setPiglets((current) => {
+    setOffspring((current) => {
       if (count <= current.length) return current.slice(0, count);
       const grown = [...current];
       for (let i = current.length; i < count; i++) {
@@ -62,8 +62,8 @@ export function FarrowingForm({
     });
   }
 
-  function update(index: number, patch: Partial<PigletRow>): void {
-    setPiglets((current) =>
+  function update(index: number, patch: Partial<OffspringRow>): void {
+    setOffspring((current) =>
       current.map((row, i) => (i === index ? { ...row, ...patch } : row))
     );
   }
@@ -101,9 +101,9 @@ export function FarrowingForm({
           htmlFor="bornAlive"
           required
           hint={
-            expectedPigletCount !== null
-              ? `${expectedPigletCount} expected at confirmation`
-              : "One animal record is created per live piglet"
+            expectedOffspringCount !== null
+              ? `${expectedOffspringCount} expected at confirmation`
+              : "One animal record is created per live offspring"
           }
         >
           <Input
@@ -131,16 +131,16 @@ export function FarrowingForm({
       <Card className="space-y-3 bg-zinc-50 dark:bg-zinc-950">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h3 className="font-medium text-zinc-900 dark:text-zinc-50">
-            Piglets ({piglets.length})
+            Offspring ({offspring.length})
           </h3>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
             Registered as animals immediately — that is what keeps the pedigree continuous.
           </p>
         </div>
 
-        {piglets.length === 0 ? (
+        {offspring.length === 0 ? (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Enter the number born alive above and a row will appear for each piglet.
+            Enter the number born alive above and a row will appear for each offspring.
           </p>
         ) : (
           <Table>
@@ -154,31 +154,31 @@ export function FarrowingForm({
               </Tr>
             </Thead>
             <Tbody>
-              {piglets.map((piglet, index) => (
+              {offspring.map((offspring, index) => (
                 <Tr key={index}>
                   <Td className="text-zinc-400">{index + 1}</Td>
                   <Td>
-                    <Label htmlFor={`piglet-tag-${index}`} className="sr-only">
-                      Tag number for piglet {index + 1}
+                    <Label htmlFor={`offspring-tag-${index}`} className="sr-only">
+                      Tag number for offspring {index + 1}
                     </Label>
                     <Input
-                      id={`piglet-tag-${index}`}
-                      name="pigletTag"
+                      id={`offspring-tag-${index}`}
+                      name="offspringTag"
                       required
-                      value={piglet.tagNumber}
+                      value={offspring.tagNumber}
                       onChange={(event) => update(index, { tagNumber: event.target.value })}
                     />
                   </Td>
                   <Td>
-                    <Label htmlFor={`piglet-sex-${index}`} className="sr-only">
-                      Sex of piglet {index + 1}
+                    <Label htmlFor={`offspring-sex-${index}`} className="sr-only">
+                      Sex of offspring {index + 1}
                     </Label>
                     <Select
-                      id={`piglet-sex-${index}`}
-                      name="pigletSex"
-                      value={piglet.sex}
+                      id={`offspring-sex-${index}`}
+                      name="offspringSex"
+                      value={offspring.sex}
                       onChange={(event) =>
-                        update(index, { sex: event.target.value as PigletRow["sex"] })
+                        update(index, { sex: event.target.value as OffspringRow["sex"] })
                       }
                     >
                       {optionsFrom(SEX_LABELS).map((option) => (
@@ -189,29 +189,29 @@ export function FarrowingForm({
                     </Select>
                   </Td>
                   <Td>
-                    <Label htmlFor={`piglet-weight-${index}`} className="sr-only">
-                      Birth weight of piglet {index + 1}
+                    <Label htmlFor={`offspring-weight-${index}`} className="sr-only">
+                      Birth weight of offspring {index + 1}
                     </Label>
                     <Input
-                      id={`piglet-weight-${index}`}
-                      name="pigletWeight"
+                      id={`offspring-weight-${index}`}
+                      name="offspringWeight"
                       type="number"
                       step="0.01"
                       min={0}
                       max={5}
                       inputMode="decimal"
-                      value={piglet.birthWeightKg}
+                      value={offspring.birthWeightKg}
                       onChange={(event) => update(index, { birthWeightKg: event.target.value })}
                     />
                   </Td>
                   <Td>
-                    <Label htmlFor={`piglet-markings-${index}`} className="sr-only">
-                      Markings of piglet {index + 1}
+                    <Label htmlFor={`offspring-markings-${index}`} className="sr-only">
+                      Markings of offspring {index + 1}
                     </Label>
                     <Input
-                      id={`piglet-markings-${index}`}
-                      name="pigletMarkings"
-                      value={piglet.markings}
+                      id={`offspring-markings-${index}`}
+                      name="offspringMarkings"
+                      value={offspring.markings}
                       onChange={(event) => update(index, { markings: event.target.value })}
                     />
                   </Td>
@@ -255,7 +255,7 @@ export function FarrowingForm({
       </Field>
 
       <SubmitButton pendingLabel="Registering litter...">
-        Record farrowing and register {piglets.length} piglet{piglets.length === 1 ? "" : "s"}
+        Record farrowing and register {offspring.length} offspring{offspring.length === 1 ? "" : "s"}
       </SubmitButton>
     </form>
   );

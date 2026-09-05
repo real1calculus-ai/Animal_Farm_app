@@ -25,7 +25,7 @@ import {
   PREGNANCY_STATUS_LABELS,
   SEX_LABELS,
 } from "@/lib/labels";
-import { checkMating, findTagCollisions, pigletBreed } from "@/lib/db/breeding";
+import { checkMating, findTagCollisions, offspringBreed } from "@/lib/db/breeding";
 import { recomputePedigreeMetrics } from "@/lib/db/animals";
 
 /**
@@ -130,7 +130,7 @@ export async function updatePregnancyStatus(formData: FormData): Promise<void> {
   const pregnancyStatus = requireEnum(formData, "pregnancyStatus", SETTABLE_PREGNANCY_STATUSES);
   const confirmationMethod = optionalEnum(formData, "confirmationMethod", CONFIRMATION_METHODS);
   const confirmationDate = optionalDate(formData, "confirmationDate");
-  const expectedPigletCount = optionalInt(formData, "expectedPigletCount");
+  const expectedOffspringCount = optionalInt(formData, "expectedOffspringCount");
   const abnormalitiesNoted = optionalString(formData, "abnormalitiesNoted");
 
   const record = await prisma.breedingRecord.findFirst({
@@ -154,8 +154,8 @@ export async function updatePregnancyStatus(formData: FormData): Promise<void> {
   if (pregnancyStatus === "CONFIRMED" && !confirmationMethod) {
     throw new Error("A confirmed pregnancy needs the method it was confirmed by");
   }
-  if (expectedPigletCount !== null && (expectedPigletCount < 0 || expectedPigletCount > 40)) {
-    throw new Error("Expected piglet count must be between 0 and 40");
+  if (expectedOffspringCount !== null && (expectedOffspringCount < 0 || expectedOffspringCount > 40)) {
+    throw new Error("Expected offspring count must be between 0 and 40");
   }
 
   await prisma.breedingRecord.update({
@@ -164,7 +164,7 @@ export async function updatePregnancyStatus(formData: FormData): Promise<void> {
       pregnancyStatus,
       confirmationMethod,
       confirmationDate,
-      expectedPigletCount,
+      expectedOffspringCount,
       abnormalitiesNoted,
     },
   });
@@ -180,10 +180,10 @@ export async function updatePregnancyStatus(formData: FormData): Promise<void> {
  * The most important write in the app: one transaction that turns a pregnancy
  * into a litter *and* into individual animals.
  *
- * Piglets are `Pig` rows from birth rather than a count that is "promoted"
- * later, because the pedigree has to be continuous — a piglet with no row is a
+ * Offspring are `Animal` rows from birth rather than a count that is "promoted"
+ * later, because the pedigree has to be continuous — a offspring with no row is a
  * gap in every inbreeding calculation the farm will ever run afterwards. Litter,
- * status change and piglet rows therefore commit together or not at all: a
+ * status change and offspring rows therefore commit together or not at all: a
  * half-written farrowing would leave the herd count wrong in a way nobody would
  * notice until the next stock take.
  */
@@ -207,10 +207,10 @@ export async function recordFarrowing(formData: FormData): Promise<void> {
   assertNotFuture(farrowingDate, "Farrowing date");
 
   if (bornAlive < 0 || stillborn < 0 || mummified < 0) {
-    throw new Error("Piglet counts cannot be negative");
+    throw new Error("Offspring counts cannot be negative");
   }
   if (bornAlive + stillborn + mummified > 40) {
-    throw new Error("That is more piglets than a sow can farrow — check the counts");
+    throw new Error("That is more offspring than a sow can farrow — check the counts");
   }
 
   const record = await prisma.breedingRecord.findFirst({
@@ -221,7 +221,7 @@ export async function recordFarrowing(formData: FormData): Promise<void> {
       pregnancyStatus: true,
       damId: true,
       sireId: true,
-      dam: { select: { tagNumber: true, breed: true, penId: true } },
+      dam: { select: { tagNumber: true, breed: true, penId: true, speciesId: true } },
       sire: { select: { breed: true } },
       litter: { select: { id: true } },
     },
@@ -247,20 +247,20 @@ export async function recordFarrowing(formData: FormData): Promise<void> {
     );
   }
 
-  // --- Piglets ---------------------------------------------------------
-  const tagNumbers = formData.getAll("pigletTag").map((value) => String(value).trim());
-  const sexes = formData.getAll("pigletSex").map((value) => String(value));
-  const weights = formData.getAll("pigletWeight").map((value) => String(value).trim());
-  const markings = formData.getAll("pigletMarkings").map((value) => String(value).trim());
+  // --- Offspring ---------------------------------------------------------
+  const tagNumbers = formData.getAll("offspringTag").map((value) => String(value).trim());
+  const sexes = formData.getAll("offspringSex").map((value) => String(value));
+  const weights = formData.getAll("offspringWeight").map((value) => String(value).trim());
+  const markings = formData.getAll("offspringMarkings").map((value) => String(value).trim());
 
   if (tagNumbers.length !== bornAlive) {
     throw new Error(
-      `${bornAlive} piglets born alive, but ${tagNumbers.length} piglet rows were submitted. Each live piglet is registered as an animal.`
+      `${bornAlive} offspring born alive, but ${tagNumbers.length} offspring rows were submitted. Each live offspring is registered as an animal.`
     );
   }
 
   const blankTag = tagNumbers.findIndex((tag) => tag.length === 0);
-  if (blankTag >= 0) throw new Error(`Piglet ${blankTag + 1} needs a tag number`);
+  if (blankTag >= 0) throw new Error(`Offspring ${blankTag + 1} needs a tag number`);
 
   const duplicatesInForm = tagNumbers.filter((tag, i) => tagNumbers.indexOf(tag) !== i);
   if (duplicatesInForm.length > 0) {
@@ -274,24 +274,25 @@ export async function recordFarrowing(formData: FormData): Promise<void> {
     );
   }
 
-  const breed = pigletBreed(record.dam.breed, record.sire.breed);
+  const breed = offspringBreed(record.dam.breed, record.sire.breed);
 
-  const piglets = tagNumbers.map((tagNumber, i) => {
+  const offspring = tagNumbers.map((tagNumber, i) => {
     // Matched against the enum list rather than compared inline. Narrowing a
     // plain `string` with `!==` against literals leaves it a `string`, so the
-    // value would reach Prisma untyped and the piglet rows would not compile
+    // value would reach Prisma untyped and the offspring rows would not compile
     // against `Sex` — `find` yields the literal union instead.
     const sex = SEXES.find((value) => value === sexes[i]);
     if (!sex) {
-      throw new Error(`Piglet ${tagNumber} needs a sex of ${SEXES.join(" or ")}`);
+      throw new Error(`Offspring ${tagNumber} needs a sex of ${SEXES.join(" or ")}`);
     }
     const weight = weights[i] ? Number.parseFloat(weights[i]) : null;
     if (weight !== null && (!Number.isFinite(weight) || weight <= 0 || weight > 5)) {
-      throw new Error(`Birth weight for piglet ${tagNumber} must be between 0 and 5 kg`);
+      throw new Error(`Birth weight for offspring ${tagNumber} must be between 0 and 5 kg`);
     }
 
     return {
       farmId,
+      speciesId: record.dam.speciesId,
       tagNumber,
       breed,
       dateOfBirth: farrowingDate,
@@ -303,7 +304,7 @@ export async function recordFarrowing(formData: FormData): Promise<void> {
       markings: markings[i] ? markings[i] : null,
       acquisitionType: "BORN_ON_FARM" as const,
       dateAcquired: farrowingDate,
-      // Piglets stay with the sow in the farrowing pen; recording that at birth
+      // Offspring stay with the sow in the farrowing pen; recording that at birth
       // keeps pen occupancy right without a second trip through the pen screen.
       penId: record.dam.penId,
       dateMovedIn: record.dam.penId ? farrowingDate : null,
@@ -325,9 +326,9 @@ export async function recordFarrowing(formData: FormData): Promise<void> {
         postFarrowingCheckNotes,
         notes,
         createdByProfileId: user.id,
-        piglets: { create: piglets },
+        offspring: { create: offspring },
       },
-      select: { id: true, piglets: { select: { id: true } } },
+      select: { id: true, offspring: { select: { id: true } } },
     });
 
     await tx.breedingRecord.update({
@@ -335,14 +336,14 @@ export async function recordFarrowing(formData: FormData): Promise<void> {
       data: { pregnancyStatus: "FARROWED" },
     });
 
-    // Generation depth and Wright's F for the new piglets, computed by the
+    // Generation depth and Wright's F for the new offspring, computed by the
     // animals module against a pedigree index loaded *through this
     // transaction* — so it already contains the rows created a moment ago.
     // Doing it here rather than from cached parent values keeps one
     // implementation of the pedigree maths in the codebase.
     await recomputePedigreeMetrics(
       farmId,
-      litter.piglets.map((piglet) => piglet.id),
+      litter.offspring.map((offspring) => offspring.id),
       tx
     );
   });
@@ -381,7 +382,7 @@ export async function recordWeaning(formData: FormData): Promise<void> {
   }
   if (weanedCount < 0 || weanedCount > litter.bornAlive) {
     throw new Error(
-      `Weaned count must be between 0 and the ${litter.bornAlive} piglets born alive`
+      `Weaned count must be between 0 and the ${litter.bornAlive} offspring born alive`
     );
   }
 
@@ -408,7 +409,7 @@ export async function recordEstrusObservation(formData: FormData): Promise<void>
 
   assertNotFuture(observedAt, "Observation date");
 
-  const sow = await prisma.pig.findFirst({
+  const sow = await prisma.animal.findFirst({
     where: { id: sowId, farmId },
     select: { id: true, sex: true, status: true, dateOfBirth: true },
   });

@@ -29,7 +29,7 @@ async function main() {
   const settings = await getFarmSettings(farm.id);
   console.log(`FARM: ${farm.name}`);
 
-  const dam = await prisma.pig.findFirstOrThrow({
+  const dam = await prisma.animal.findFirstOrThrow({
     where: { farmId: farm.id, sex: "FEMALE", status: "ACTIVE", motherId: { not: null } },
     select: { id: true, tagNumber: true },
   });
@@ -47,8 +47,8 @@ async function main() {
 
   const index = await loadPedigreeIndex(farm.id);
   const calc = createInbreedingCalculator(index);
-  const a = await prisma.pig.findFirst({ where: { farmId: farm.id, tagNumber: "G1A-02" }, select: { id: true } });
-  const b = await prisma.pig.findFirst({ where: { farmId: farm.id, tagNumber: "G1B-01" }, select: { id: true } });
+  const a = await prisma.animal.findFirst({ where: { farmId: farm.id, tagNumber: "G1A-02" }, select: { id: true } });
+  const b = await prisma.animal.findFirst({ where: { farmId: farm.id, tagNumber: "G1B-01" }, select: { id: true } });
   if (a && b) {
     const f = calc.offspringInbreeding(b.id, a.id);
     console.log(`\nHALF-SIB CHECK  G1B-01 x G1A-02 (both by sire B-001)`);

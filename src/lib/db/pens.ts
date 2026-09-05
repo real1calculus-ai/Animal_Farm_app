@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 /**
  * Pen and housing queries. Occupancy is counted from live animals rather than
  * stored on the pen: a denormalised `currentOccupancy` column is wrong the
- * moment a pig dies or is sold without someone remembering to decrement it,
+ * moment a animal dies or is sold without someone remembering to decrement it,
  * and an over-capacity warning that fires on a stale number is worse than no
  * warning at all.
  *
@@ -70,7 +70,7 @@ export async function listPenOccupancy(
   const penIds = pens.map((p) => p.id);
 
   const [counts, tasks] = await Promise.all([
-    prisma.pig.groupBy({
+    prisma.animal.groupBy({
       by: ["penId"],
       where: { farmId, status: "ACTIVE", penId: { in: penIds } },
       _count: { _all: true },
@@ -186,7 +186,7 @@ export async function getPen(farmId: string, id: string) {
 }
 
 export async function getPenOccupants(farmId: string, penId: string) {
-  return prisma.pig.findMany({
+  return prisma.animal.findMany({
     where: { farmId, penId, status: "ACTIVE" },
     select: {
       id: true,
@@ -212,7 +212,7 @@ export async function getPenMovementHistory(penId: string, limit = 100) {
       reason: true,
       fromPenName: true,
       toPenName: true,
-      pig: { select: { id: true, tagNumber: true, name: true } },
+      animal: { select: { id: true, tagNumber: true, name: true } },
       movedBy: { select: { name: true } },
     },
     orderBy: { movedAt: "desc" },

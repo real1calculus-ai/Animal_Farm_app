@@ -214,7 +214,7 @@ export default async function SettingsPage() {
             label="Weaning age (days)"
             htmlFor="weaningAgeDays"
             required
-            hint="Target age for moving piglets off the sow. Drives the weaning-due list and the nursery moves that follow it."
+            hint="Target age for moving offspring off the sow. Drives the weaning-due list and the nursery moves that follow it."
           >
             <Input
               id="weaningAgeDays"

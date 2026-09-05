@@ -41,7 +41,7 @@ export default async function AnimalSalesPage({ searchParams }: PageProps<"/fina
     <>
       <PageHeader
         title="Animal sales"
-        description="Sales of finished pigs, feeder pigs, breeding stock and culls."
+        description="Sales of finished animals, feeder animals, breeding stock and culls."
         actions={<ButtonLink href="/finance/sales/new">Record a sale</ButtonLink>}
       />
       <FinanceSubnav current="/finance/sales" />

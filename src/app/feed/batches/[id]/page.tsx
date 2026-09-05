@@ -39,7 +39,7 @@ export default async function FeedBatchDetailPage({ params }: PageProps<"/feed/b
 
   // The distinct pens and animals this lot reached — the recall list.
   const pens = new Map<string, { name: string; kg: number; lastFedAt: Date }>();
-  const pigs = new Map<
+  const animals = new Map<
     string,
     { tagNumber: string; name: string | null; status: string; kg: number; lastFedAt: Date }
   >();
@@ -55,17 +55,17 @@ export default async function FeedBatchDetailPage({ params }: PageProps<"/feed/b
       if (record.fedAt > row.lastFedAt) row.lastFedAt = record.fedAt;
       pens.set(record.pen.id, row);
     }
-    if (record.pig) {
-      const row = pigs.get(record.pig.id) ?? {
-        tagNumber: record.pig.tagNumber,
-        name: record.pig.name,
-        status: record.pig.status,
+    if (record.animal) {
+      const row = animals.get(record.animal.id) ?? {
+        tagNumber: record.animal.tagNumber,
+        name: record.animal.name,
+        status: record.animal.status,
         kg: 0,
         lastFedAt: record.fedAt,
       };
       row.kg += record.consumedKg ?? record.allocatedKg;
       if (record.fedAt > row.lastFedAt) row.lastFedAt = record.fedAt;
-      pigs.set(record.pig.id, row);
+      animals.set(record.animal.id, row);
     }
   }
 
@@ -191,7 +191,7 @@ export default async function FeedBatchDetailPage({ params }: PageProps<"/feed/b
           If this lot is recalled, these are the animals to check.
         </p>
 
-        {pens.size === 0 && pigs.size === 0 ? (
+        {pens.size === 0 && animals.size === 0 ? (
           <EmptyState
             title="Nothing has been fed from this batch yet"
             description="It will appear here as soon as a feeding record draws from it."
@@ -231,10 +231,10 @@ export default async function FeedBatchDetailPage({ params }: PageProps<"/feed/b
               </div>
             ) : null}
 
-            {pigs.size > 0 ? (
+            {animals.size > 0 ? (
               <div>
                 <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                  Individual animals ({pigs.size})
+                  Individual animals ({animals.size})
                 </h3>
                 <Table>
                   <Thead>
@@ -245,11 +245,11 @@ export default async function FeedBatchDetailPage({ params }: PageProps<"/feed/b
                     </Tr>
                   </Thead>
                   <Tbody>
-                    {[...pigs.entries()].map(([pigId, row]) => (
-                      <Tr key={pigId}>
+                    {[...animals.entries()].map(([animalId, row]) => (
+                      <Tr key={animalId}>
                         <Td>
                           <Link
-                            href={`/animals/${pigId}`}
+                            href={`/animals/${animalId}`}
                             className="underline decoration-zinc-300 underline-offset-2 dark:decoration-zinc-700"
                           >
                             {row.tagNumber}
@@ -295,8 +295,8 @@ export default async function FeedBatchDetailPage({ params }: PageProps<"/feed/b
                   <Td>{formatDate(record.fedAt)}</Td>
                   <Td>
                     {record.pen?.name ??
-                      (record.pig
-                        ? `${record.pig.tagNumber}${record.pig.name ? ` — ${record.pig.name}` : ""}`
+                      (record.animal
+                        ? `${record.animal.tagNumber}${record.animal.name ? ` — ${record.animal.name}` : ""}`
                         : "—")}
                   </Td>
                   <Td className="text-right tabular-nums">{record.animalCount}</Td>

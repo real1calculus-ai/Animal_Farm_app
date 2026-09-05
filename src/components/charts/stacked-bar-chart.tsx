@@ -14,7 +14,7 @@ export type StackedRow = {
  *
  * Rows are normalised to their own total so the *mix* is comparable between a
  * pen of 8 and a pen of 80; the absolute total goes in `hint`, because a
- * percentage without its denominator is how a single sick piglet becomes
+ * percentage without its denominator is how a single sick offspring becomes
  * "50% respiratory disease".
  */
 export function StackedBarChart({

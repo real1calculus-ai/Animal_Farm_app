@@ -6,7 +6,7 @@ import type { AnimalSaleType, TransactionCategory } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { FINANCE_ROLES, requireRole } from "@/lib/auth";
 import { getActiveFarmId } from "@/lib/active-farm";
-import { assertPigsMayBeSold } from "@/lib/health/withdrawal";
+import { assertAnimalsMayBeSold } from "@/lib/health/withdrawal";
 import { ANIMAL_SALE_TYPE_LABELS } from "@/lib/labels";
 import {
   assertNotFuture,
@@ -20,12 +20,12 @@ import {
 
 /**
  * Which income category a sale books against. Derived from the sale type
- * rather than asked for separately: a "cull" sale filed under "finished pig
+ * rather than asked for separately: a "cull" sale filed under "finished animal
  * sale" would quietly corrupt every revenue-by-source breakdown, and there is
  * no case where the operator should be able to disagree with themselves.
  */
 const CATEGORY_BY_SALE_TYPE: Record<AnimalSaleType, TransactionCategory> = {
-  FEEDER_PIG: "PIGLET_SALE",
+  FEEDER: "YOUNG_STOCK_SALE",
   FINISHED_PIG: "FINISHED_PIG_SALE",
   BREEDING_STOCK: "BREEDING_STOCK_SALE",
   CULL: "CULL_SALE",
@@ -34,7 +34,7 @@ const CATEGORY_BY_SALE_TYPE: Record<AnimalSaleType, TransactionCategory> = {
 const SALE_TYPES = Object.keys(ANIMAL_SALE_TYPE_LABELS) as AnimalSaleType[];
 
 type ParsedItem = {
-  pigId: string;
+  animalId: string;
   weightKg: number;
   pricePerKgCents: number;
   amountCents: number;
@@ -61,13 +61,13 @@ function parseItems(formData: FormData): ParsedItem[] {
   for (const rowId of rowIds) {
     // A row the operator left blank is skipped, not an error — the builder
     // always renders one empty row to start with.
-    const pigId = optionalString(formData, `item-${rowId}-pigId`);
-    if (!pigId) continue;
+    const animalId = optionalString(formData, `item-${rowId}-animalId`);
+    if (!animalId) continue;
 
-    if (seen.has(pigId)) {
+    if (seen.has(animalId)) {
       throw new Error("The same animal appears twice on this sale");
     }
-    seen.add(pigId);
+    seen.add(animalId);
 
     const weightKg = requireFloat(formData, `item-${rowId}-weightKg`);
     if (weightKg <= 0) throw new Error("Sale weight must be greater than zero");
@@ -76,7 +76,7 @@ function parseItems(formData: FormData): ParsedItem[] {
     if (pricePerKgCents <= 0) throw new Error("Price per kg must be greater than zero");
 
     items.push({
-      pigId,
+      animalId,
       weightKg,
       pricePerKgCents,
       // Money stays in integer minor units: multiply the kg by the per-kg
@@ -121,30 +121,30 @@ export async function createAnimalSale(formData: FormData): Promise<void> {
   const notes = optionalString(formData, "notes");
 
   const items = parseItems(formData);
-  const pigIds = items.map((item) => item.pigId);
+  const animalIds = items.map((item) => item.animalId);
   // The total is computed, never typed. See the note in SaleBuilder.
   const totalCents = items.reduce((sum, item) => sum + item.amountCents, 0);
 
   // Confirm every animal is on this farm and still alive before we touch
   // anything — scoping by farmId here is what stops a hand-crafted POST from
   // selling another tenant's herd.
-  const pigs = await prisma.pig.findMany({
-    where: { id: { in: pigIds }, farmId },
+  const animals = await prisma.animal.findMany({
+    where: { id: { in: animalIds }, farmId },
     select: { id: true, tagNumber: true, status: true, dateOfBirth: true },
   });
 
-  if (pigs.length !== pigIds.length) {
+  if (animals.length !== animalIds.length) {
     throw new Error("One or more of those animals could not be found on this farm");
   }
 
-  const notActive = pigs.filter((pig) => pig.status !== "ACTIVE");
+  const notActive = animals.filter((animal) => animal.status !== "ACTIVE");
   if (notActive.length > 0) {
     throw new Error(
       `Already exited and cannot be sold: ${notActive.map((p) => p.tagNumber).join(", ")}`
     );
   }
 
-  const bornAfter = pigs.filter((pig) => pig.dateOfBirth > soldAt);
+  const bornAfter = animals.filter((animal) => animal.dateOfBirth > soldAt);
   if (bornAfter.length > 0) {
     throw new Error(
       `Sale date is before the birth date of ${bornAfter.map((p) => p.tagNumber).join(", ")}`
@@ -156,7 +156,7 @@ export async function createAnimalSale(formData: FormData): Promise<void> {
     // if any animal is inside a medication withdrawal window on the sale date.
     // Deliberately inside the transaction so the check cannot be separated
     // from the write it protects.
-    await assertPigsMayBeSold(pigIds, farmId, { saleDate: soldAt });
+    await assertAnimalsMayBeSold(animalIds, farmId, { saleDate: soldAt });
 
     const sale = await tx.animalSale.create({
       data: {
@@ -170,7 +170,7 @@ export async function createAnimalSale(formData: FormData): Promise<void> {
         createdByProfileId: user.id,
         items: {
           create: items.map((item) => ({
-            pigId: item.pigId,
+            animalId: item.animalId,
             weightKg: item.weightKg,
             pricePerKgCents: item.pricePerKgCents,
             amountCents: item.amountCents,
@@ -181,8 +181,8 @@ export async function createAnimalSale(formData: FormData): Promise<void> {
       select: { id: true },
     });
 
-    await tx.pig.updateMany({
-      where: { id: { in: pigIds }, farmId },
+    await tx.animal.updateMany({
+      where: { id: { in: animalIds }, farmId },
       data: { status: "SOLD", dateExit: soldAt, exitReason: "SOLD" },
     });
 

@@ -8,7 +8,7 @@ import { Input, Label, Select } from "@/components/ui/input";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { recordVaccination } from "@/app/health/vaccinations/actions";
 
-export type VaccinationFormPig = {
+export type VaccinationFormAnimal = {
   id: string;
   tagNumber: string;
   name: string | null;
@@ -41,21 +41,21 @@ function addDaysIso(days: number): string {
  * and the lot number — the thing a recall depends on — is the first casualty.
  */
 export function VaccinationForm({
-  pigs,
+  animals,
   pens,
   protocolItems,
-  defaultPigId,
+  defaultAnimalId,
   defaultProtocolItemId,
 }: {
-  pigs: VaccinationFormPig[];
+  animals: VaccinationFormAnimal[];
   pens: VaccinationFormPen[];
   protocolItems: VaccinationFormProtocol[];
-  defaultPigId?: string;
+  defaultAnimalId?: string;
   defaultProtocolItemId?: string;
 }) {
   const initialProtocol = protocolItems.find((item) => item.id === defaultProtocolItemId);
 
-  const [scope, setScope] = useState<"ANIMAL" | "PEN">(defaultPigId ? "ANIMAL" : "PEN");
+  const [scope, setScope] = useState<"ANIMAL" | "PEN">(defaultAnimalId ? "ANIMAL" : "PEN");
   const [protocolItemId, setProtocolItemId] = useState(defaultProtocolItemId ?? "");
   const [vaccineName, setVaccineName] = useState(initialProtocol?.vaccineName ?? "");
   const [nextDueDate, setNextDueDate] = useState(
@@ -74,14 +74,14 @@ export function VaccinationForm({
   }
 
   const needle = query.trim().toLowerCase();
-  const filteredPigs = needle
-    ? pigs.filter((pig) =>
-        [pig.tagNumber, pig.name ?? "", pig.penName ?? ""]
+  const filteredAnimals = needle
+    ? animals.filter((animal) =>
+        [animal.tagNumber, animal.name ?? "", animal.penName ?? ""]
           .join(" ")
           .toLowerCase()
           .includes(needle)
       )
-    : pigs;
+    : animals;
 
   return (
     <Card className="space-y-4">
@@ -145,14 +145,14 @@ export function VaccinationForm({
                 placeholder="Tag number, name or pen"
               />
             </Field>
-            <Field label="Animal" htmlFor="pigId" required>
-              <Select id="pigId" name="pigId" required defaultValue={defaultPigId ?? ""}>
+            <Field label="Animal" htmlFor="animalId" required>
+              <Select id="animalId" name="animalId" required defaultValue={defaultAnimalId ?? ""}>
                 <option value="">Select an animal</option>
-                {filteredPigs.map((pig) => (
-                  <option key={pig.id} value={pig.id}>
-                    {pig.tagNumber}
-                    {pig.name ? ` — ${pig.name}` : ""}
-                    {pig.penName ? ` · ${pig.penName}` : ""}
+                {filteredAnimals.map((animal) => (
+                  <option key={animal.id} value={animal.id}>
+                    {animal.tagNumber}
+                    {animal.name ? ` — ${animal.name}` : ""}
+                    {animal.penName ? ` · ${animal.penName}` : ""}
                   </option>
                 ))}
               </Select>

@@ -18,13 +18,13 @@ import type { PenChoice } from "@/components/animals/animal-form";
  * surfaces weeks later as tail-biting and stunted growth.
  */
 export function MovePenForm({
-  pigId,
+  animalId,
   currentPenId,
   action,
   pens,
   defaultDate,
 }: {
-  pigId: string;
+  animalId: string;
   currentPenId: string | null;
   action: (state: AnimalActionState, formData: FormData) => Promise<AnimalActionState>;
   pens: PenChoice[];
@@ -35,7 +35,7 @@ export function MovePenForm({
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      <input type="hidden" name="pigId" value={pigId} />
+      <input type="hidden" name="animalId" value={animalId} />
       <ActionBanner state={state} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

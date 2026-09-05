@@ -8,7 +8,7 @@ import { SaleBuilder, type SellableAnimal } from "@/components/finance/sale-buil
 import { FINANCE_ROLES, requireRole } from "@/lib/auth";
 import { getActiveFarmId } from "@/lib/active-farm";
 import { listSellableAnimals } from "@/lib/db/finance";
-import { checkPigsSaleEligibility } from "@/lib/health/withdrawal";
+import { checkAnimalsSaleEligibility } from "@/lib/health/withdrawal";
 import { ANIMAL_SALE_TYPE_LABELS, optionsFrom } from "@/lib/labels";
 import { toDateInputValue } from "@/lib/format";
 import { createAnimalSale } from "@/app/finance/sales/actions";
@@ -22,14 +22,14 @@ export default async function NewSalePage() {
   const animals = await listSellableAnimals(farmId);
 
   // Non-throwing check, used only to grey animals out of the picker. The
-  // enforcement point is `assertPigsMayBeSold` inside the server action —
+  // enforcement point is `assertAnimalsMayBeSold` inside the server action —
   // this page could be minutes stale by the time the form is submitted.
-  const eligibility = await checkPigsSaleEligibility(
+  const eligibility = await checkAnimalsSaleEligibility(
     animals.map((animal) => animal.id),
     farmId
   );
   const blockedById = new Map(
-    eligibility.filter((row) => !row.allowed).map((row) => [row.pigId, row.reason])
+    eligibility.filter((row) => !row.allowed).map((row) => [row.animalId, row.reason])
   );
 
   const sellable: SellableAnimal[] = animals.map((animal) => ({

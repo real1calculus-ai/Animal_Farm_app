@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { addDays, daysBetween, formatDate } from "@/lib/format";
 import { computeWithdrawalStatus, WITHDRAWAL_MEDICATION_SELECT } from "@/lib/health/withdrawal-period";
 import type { FarmSettings } from "@prisma/client";
-import { pigLabel, type Alert } from "@/lib/alerts/types";
+import { animalLabel, type Alert } from "@/lib/alerts/types";
 
 export async function healthAlerts(farmId: string, settings: FarmSettings, now: Date): Promise<Alert[]> {
   const alerts: Alert[] = [];
@@ -14,18 +14,20 @@ export async function healthAlerts(farmId: string, settings: FarmSettings, now: 
       diagnosis: true,
       severity: true,
       recordedAt: true,
-      pig: { select: { id: true, tagNumber: true, name: true } },
+      animal: { select: { id: true, tagNumber: true, name: true } },
     },
     orderBy: { recordedAt: "desc" },
     take: 30,
   });
 
   for (const record of ongoing) {
+    // Batch treatments surface on the batch screens, not as a named animal.
+    if (!record.animal) continue;
     alerts.push({
       key: `ongoing-case:${record.id}`,
       severity: record.severity === "SEVERE" ? "CRITICAL" : "WARNING",
       title: "Animal under treatment",
-      detail: `${pigLabel(record.pig)} — ${record.diagnosis}, recorded ${formatDate(record.recordedAt)} and still ongoing.`,
+      detail: `${animalLabel(record.animal)} — ${record.diagnosis}, recorded ${formatDate(record.recordedAt)} and still ongoing.`,
       href: `/health/${record.id}`,
       family: "HEALTH",
     });
@@ -34,7 +36,7 @@ export async function healthAlerts(farmId: string, settings: FarmSettings, now: 
   // Animals inside a medication withdrawal window. Surfaced not as a warning
   // about the animal's health but because selling one is a food-safety
   // breach — the sale flow blocks it, and this is the advance notice.
-  const medicated = await prisma.pig.findMany({
+  const medicated = await prisma.animal.findMany({
     where: {
       farmId,
       status: "ACTIVE",
@@ -49,17 +51,17 @@ export async function healthAlerts(farmId: string, settings: FarmSettings, now: 
     take: 50,
   });
 
-  for (const pig of medicated) {
-    const medications = pig.healthRecords.flatMap((record) => record.medications);
+  for (const animal of medicated) {
+    const medications = animal.healthRecords.flatMap((record) => record.medications);
     const status = computeWithdrawalStatus(medications, now);
     if (!status.inWithdrawal || !status.clearanceDate) continue;
 
     alerts.push({
-      key: `withdrawal:${pig.id}`,
+      key: `withdrawal:${animal.id}`,
       severity: "WARNING",
       title: "Inside withdrawal period",
-      detail: `${pigLabel(pig)} cannot be sold or slaughtered until ${formatDate(status.clearanceDate)} (${status.daysRemaining} day${status.daysRemaining === 1 ? "" : "s"}) — ${status.blockingMedications.map((m) => m.drugName).join(", ")}.`,
-      href: `/animals/${pig.id}`,
+      detail: `${animalLabel(animal)} cannot be sold or slaughtered until ${formatDate(status.clearanceDate)} (${status.daysRemaining} day${status.daysRemaining === 1 ? "" : "s"}) — ${status.blockingMedications.map((m) => m.drugName).join(", ")}.`,
+      href: `/animals/${animal.id}`,
       family: "HEALTH",
     });
   }
@@ -75,25 +77,26 @@ export async function healthAlerts(farmId: string, settings: FarmSettings, now: 
       recordedAt: { gte: windowStart },
       recordType: { in: ["ILLNESS", "INJURY"] },
     },
-    select: { pigId: true, diagnosis: true, pig: { select: { pen: { select: { name: true } } } } },
+    select: { animalId: true, diagnosis: true, animal: { select: { pen: { select: { name: true } } } } },
   });
 
-  const clusters = new Map<string, { pigIds: Set<string>; pens: Set<string> }>();
+  const clusters = new Map<string, { animalIds: Set<string>; pens: Set<string> }>();
   for (const record of recent) {
-    const entry = clusters.get(record.diagnosis) ?? { pigIds: new Set(), pens: new Set() };
-    entry.pigIds.add(record.pigId);
-    if (record.pig.pen?.name) entry.pens.add(record.pig.pen.name);
+    if (!record.animalId || !record.animal) continue;
+    const entry = clusters.get(record.diagnosis) ?? { animalIds: new Set(), pens: new Set() };
+    entry.animalIds.add(record.animalId);
+    if (record.animal.pen?.name) entry.pens.add(record.animal.pen.name);
     clusters.set(record.diagnosis, entry);
   }
 
   for (const [diagnosis, entry] of clusters) {
-    if (entry.pigIds.size < settings.outbreakCaseThreshold) continue;
+    if (entry.animalIds.size < settings.outbreakCaseThreshold) continue;
     const pens = [...entry.pens];
     alerts.push({
       key: `outbreak:${diagnosis}`,
       severity: "CRITICAL",
       title: "Possible disease cluster",
-      detail: `${entry.pigIds.size} animals diagnosed with ${diagnosis} in the last ${settings.outbreakWindowDays} days${pens.length > 0 ? `, across ${pens.join(", ")}` : ""}. Consider isolating affected animals.`,
+      detail: `${entry.animalIds.size} animals diagnosed with ${diagnosis} in the last ${settings.outbreakWindowDays} days${pens.length > 0 ? `, across ${pens.join(", ")}` : ""}. Consider isolating affected animals.`,
       href: "/health/monitoring",
       family: "HEALTH",
     });
@@ -103,10 +106,10 @@ export async function healthAlerts(farmId: string, settings: FarmSettings, now: 
   // says nothing on its own — three deaths is routine on a large unit and
   // alarming on a small one — so it is the change that is reported.
   const [recentDeaths, priorDeaths] = await Promise.all([
-    prisma.pig.count({
+    prisma.animal.count({
       where: { farmId, status: "DECEASED", dateExit: { gte: windowStart, lte: now } },
     }),
-    prisma.pig.count({
+    prisma.animal.count({
       where: {
         farmId,
         status: "DECEASED",
@@ -128,12 +131,12 @@ export async function healthAlerts(farmId: string, settings: FarmSettings, now: 
 
   // Vaccinations past their recorded next-due date.
   const overdueVaccinations = await prisma.vaccinationRecord.findMany({
-    where: { pig: { farmId, status: "ACTIVE" }, nextDueDate: { lt: now } },
+    where: { animal: { farmId, status: "ACTIVE" }, nextDueDate: { lt: now } },
     select: {
       id: true,
       vaccineName: true,
       nextDueDate: true,
-      pig: { select: { id: true, tagNumber: true, name: true } },
+      animal: { select: { id: true, tagNumber: true, name: true } },
     },
     orderBy: { nextDueDate: "asc" },
     take: 25,
@@ -145,7 +148,7 @@ export async function healthAlerts(farmId: string, settings: FarmSettings, now: 
       key: `vaccination-overdue:${record.id}`,
       severity: "WARNING",
       title: "Vaccination overdue",
-      detail: `${pigLabel(record.pig)} — ${record.vaccineName} was due ${formatDate(record.nextDueDate)}, ${overdueBy} day${overdueBy === 1 ? "" : "s"} ago.`,
+      detail: `${animalLabel(record.animal)} — ${record.vaccineName} was due ${formatDate(record.nextDueDate)}, ${overdueBy} day${overdueBy === 1 ? "" : "s"} ago.`,
       href: "/health/vaccinations",
       family: "HEALTH",
     });

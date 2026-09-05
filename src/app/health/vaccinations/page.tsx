@@ -20,7 +20,7 @@ import type { LifeStage } from "@prisma/client";
 import {
   getVaccinationObligations,
   listPenOptions,
-  listPigOptions,
+  listAnimalOptions,
   listProtocolItems,
   listVaccinationRecords,
   splitSchedule,
@@ -45,11 +45,11 @@ export default async function VaccinationsPage({
   const farmId = await getActiveFarmId(user);
   const params = await searchParams;
 
-  const [records, obligations, protocolItems, pigs, pens] = await Promise.all([
+  const [records, obligations, protocolItems, animals, pens] = await Promise.all([
     listVaccinationRecords(farmId, { penId: firstParam(params.penId) }),
     getVaccinationObligations(farmId),
     listProtocolItems(farmId, { activeOnly: true }),
-    listPigOptions(farmId),
+    listAnimalOptions(farmId),
     listPenOptions(farmId),
   ]);
 
@@ -175,11 +175,11 @@ export default async function VaccinationsPage({
 
       {canRecord ? (
         <VaccinationForm
-          pigs={pigs.map((pig) => ({
-            id: pig.id,
-            tagNumber: pig.tagNumber,
-            name: pig.name,
-            penName: pig.penName,
+          animals={animals.map((animal) => ({
+            id: animal.id,
+            tagNumber: animal.tagNumber,
+            name: animal.name,
+            penName: animal.penName,
           }))}
           pens={pens}
           protocolItems={protocolItems.map((item) => ({
@@ -188,7 +188,7 @@ export default async function VaccinationsPage({
             vaccineName: item.vaccineName,
             boosterIntervalDays: item.boosterIntervalDays,
           }))}
-          defaultPigId={firstParam(params.pigId) ?? undefined}
+          defaultAnimalId={firstParam(params.animalId) ?? undefined}
           defaultProtocolItemId={firstParam(params.protocolItemId) ?? undefined}
         />
       ) : (
@@ -228,13 +228,13 @@ export default async function VaccinationsPage({
                   <Td className="whitespace-nowrap">{formatDate(record.administeredAt)}</Td>
                   <Td className="whitespace-nowrap">
                     <Link
-                      href={`/animals/${record.pig.id}`}
+                      href={`/animals/${record.animal.id}`}
                       className="font-medium underline underline-offset-2"
                     >
-                      {record.pig.tagNumber}
+                      {record.animal.tagNumber}
                     </Link>
                   </Td>
-                  <Td>{record.pig.pen?.name ?? "—"}</Td>
+                  <Td>{record.animal.pen?.name ?? "—"}</Td>
                   <Td>{record.vaccineName}</Td>
                   <Td className="text-zinc-500 dark:text-zinc-400">
                     {record.protocolItem?.name ?? "Off protocol"}
@@ -313,7 +313,7 @@ function ScheduleTable({
               <Tr key={row.key}>
                 <Td className="whitespace-nowrap">
                   <Link
-                    href={`/animals/${row.pigId}`}
+                    href={`/animals/${row.animalId}`}
                     className="font-medium underline underline-offset-2"
                   >
                     {row.tagNumber}
@@ -337,7 +337,7 @@ function ScheduleTable({
                 {canRecord ? (
                   <Td className="text-right">
                     <Link
-                      href={`/health/vaccinations?pigId=${row.pigId}&protocolItemId=${row.protocolItemId}`}
+                      href={`/health/vaccinations?animalId=${row.animalId}&protocolItemId=${row.protocolItemId}`}
                       className="text-sm underline underline-offset-2"
                     >
                       Record dose

@@ -155,7 +155,7 @@ export async function litterSizeTrend(farmId: string, range: DateRange): Promise
 
   return {
     buckets,
-    // Null, not zero: "no litters that month" is not "litters of zero piglets",
+    // Null, not zero: "no litters that month" is not "litters of zero offspring",
     // and a zero would drag the trend line through the floor.
     values: sums.map((sum, i) => (counts[i] > 0 ? sum / counts[i] : null)),
   };
@@ -174,7 +174,7 @@ export type SowProductivityRow = {
 };
 
 export async function sowProductivity(farmId: string): Promise<SowProductivityRow[]> {
-  const sows = await prisma.pig.findMany({
+  const sows = await prisma.animal.findMany({
     where: { farmId, sex: "FEMALE", breedingsAsDam: { some: { litter: { isNot: null } } } },
     select: {
       id: true,
@@ -224,7 +224,7 @@ export async function sowProductivity(farmId: string): Promise<SowProductivityRo
 // ---------------------------------------------------------------------------
 
 export type GrowthRow = {
-  pigId: string;
+  animalId: string;
   tagNumber: string;
   breed: string;
   penName: string | null;
@@ -235,7 +235,7 @@ export type GrowthRow = {
 };
 
 export async function growthRows(farmId: string, range: DateRange): Promise<GrowthRow[]> {
-  const pigs = await prisma.pig.findMany({
+  const animals = await prisma.animal.findMany({
     where: { farmId, weightRecords: { some: { recordedAt: { gte: range.from, lte: range.to } } } },
     select: {
       id: true,
@@ -253,17 +253,17 @@ export async function growthRows(farmId: string, range: DateRange): Promise<Grow
 
   const now = new Date();
 
-  return pigs.map((pig) => {
-    const first = pig.weightRecords[0];
-    const last = pig.weightRecords[pig.weightRecords.length - 1];
+  return animals.map((animal) => {
+    const first = animal.weightRecords[0];
+    const last = animal.weightRecords[animal.weightRecords.length - 1];
     const days = daysBetween(first.recordedAt, last.recordedAt);
 
     return {
-      pigId: pig.id,
-      tagNumber: pig.tagNumber,
-      breed: pig.breed,
-      penName: pig.pen?.name ?? null,
-      ageDays: daysBetween(pig.dateOfBirth, now),
+      animalId: animal.id,
+      tagNumber: animal.tagNumber,
+      breed: animal.breed,
+      penName: animal.pen?.name ?? null,
+      ageDays: daysBetween(animal.dateOfBirth, now),
       latestWeightKg: last.weightKg,
       // Needs two readings genuinely apart in time; same-day repeats would
       // divide by zero and produce an infinite daily gain.
@@ -276,7 +276,7 @@ export type MortalityRow = { label: string; deaths: number; total: number; rate:
 
 export async function mortalityByPen(farmId: string, range: DateRange): Promise<MortalityRow[]> {
   const [deaths, population] = await Promise.all([
-    prisma.pig.groupBy({
+    prisma.animal.groupBy({
       by: ["penId"],
       where: {
         farmId,
@@ -285,7 +285,7 @@ export async function mortalityByPen(farmId: string, range: DateRange): Promise<
       },
       _count: { _all: true },
     }),
-    prisma.pig.groupBy({ by: ["penId"], where: { farmId }, _count: { _all: true } }),
+    prisma.animal.groupBy({ by: ["penId"], where: { farmId }, _count: { _all: true } }),
   ]);
 
   const pens = await prisma.pen.findMany({
@@ -366,7 +366,7 @@ export async function antibioticUsage(farmId: string, range: DateRange): Promise
       healthRecord: { farmId },
       startDate: { gte: range.from, lte: range.to },
     },
-    select: { startDate: true, healthRecord: { select: { pigId: true } } },
+    select: { startDate: true, healthRecord: { select: { animalId: true } } },
   });
 
   const courses = buckets.map(() => 0);
@@ -376,7 +376,11 @@ export async function antibioticUsage(farmId: string, range: DateRange): Promise
     const index = bucketIndexFor(buckets, medication.startDate);
     if (index < 0) continue;
     courses[index] += 1;
-    animalSets[index].add(medication.healthRecord.pigId);
+    // Antibiotic *courses* count either way; distinct animals treated can only
+    // count the ones a record actually names.
+    if (medication.healthRecord.animalId) {
+      animalSets[index].add(medication.healthRecord.animalId);
+    }
   }
 
   return {
@@ -384,7 +388,7 @@ export async function antibioticUsage(farmId: string, range: DateRange): Promise
     courses,
     animals: animalSets.map((set) => set.size),
     totalCourses: medications.length,
-    totalAnimals: new Set(medications.map((m) => m.healthRecord.pigId)).size,
+    totalAnimals: new Set(medications.map((m) => m.healthRecord.animalId)).size,
   };
 }
 

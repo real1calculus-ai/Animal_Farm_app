@@ -142,7 +142,7 @@ export default async function ProfitabilityPage({
             are attributable costs only — feed the animal is recorded as having
             eaten, its own treatments, its acquisition price. Farm-level
             overheads are shown separately because splitting labour and
-            electricity across pigs by headcount would look precise and mean
+            electricity across animals by headcount would look precise and mean
             almost nothing.
           */}
           <Card className="mb-6">
@@ -160,7 +160,7 @@ export default async function ProfitabilityPage({
                 Farm-level overheads ({formatCents(result.overheadCents)} — labour, utilities,
                 housing, transport, marketing) are <strong>not</strong> mixed into the per-animal
                 cost. They are allocated by days on farm and shown as a separate line, because
-                spreading them across pigs by headcount would look precise while meaning very
+                spreading them across animals by headcount would look precise while meaning very
                 little.
               </li>
               {result.unattributedPenFeedCents > 0 ? (
@@ -210,10 +210,10 @@ export default async function ProfitabilityPage({
                   </Thead>
                   <Tbody>
                     {sold.map((animal) => (
-                      <Tr key={animal.pigId}>
+                      <Tr key={animal.animalId}>
                         <Td>
                           <Link
-                            href={`/animals/${animal.pigId}`}
+                            href={`/animals/${animal.animalId}`}
                             className="font-medium underline underline-offset-2"
                           >
                             {animal.tagNumber}

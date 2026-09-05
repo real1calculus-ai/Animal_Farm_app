@@ -6,7 +6,7 @@ import { createHealthRecord } from "@/app/health/actions";
 import { requireRole } from "@/lib/auth";
 import { getActiveFarmId } from "@/lib/active-farm";
 import { toDateInputValue } from "@/lib/format";
-import { listPigOptions } from "@/lib/db/health";
+import { listAnimalOptions } from "@/lib/db/health";
 
 /**
  * Recording a health event. A WORKER may do this — observation is the whole
@@ -17,13 +17,13 @@ export default async function NewHealthRecordPage() {
   const user = await requireRole(["ADMIN", "MANAGER", "VETERINARIAN", "WORKER"]);
   const farmId = await getActiveFarmId(user);
 
-  const pigs = await listPigOptions(farmId);
-  const animals: AnimalChoice[] = pigs.map((pig) => ({
-    id: pig.id,
-    tagNumber: pig.tagNumber,
-    name: pig.name,
-    dateOfBirth: toDateInputValue(pig.dateOfBirth),
-    penName: pig.penName,
+  const animalRows = await listAnimalOptions(farmId);
+  const animals: AnimalChoice[] = animalRows.map((animal) => ({
+    id: animal.id,
+    tagNumber: animal.tagNumber,
+    name: animal.name,
+    dateOfBirth: toDateInputValue(animal.dateOfBirth),
+    penName: animal.penName,
   }));
 
   return (

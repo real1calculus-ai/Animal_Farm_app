@@ -85,18 +85,18 @@ export async function recordVaccination(formData: FormData): Promise<void> {
   const scope = formData.get("scope") === "PEN" ? "PEN" : "ANIMAL";
   const fields = await readFields(formData, farmId);
 
-  const pigs =
+  const animals =
     scope === "PEN"
-      ? await prisma.pig.findMany({
+      ? await prisma.animal.findMany({
           where: { farmId, status: "ACTIVE", penId: requireString(formData, "penId") },
           select: { id: true, dateOfBirth: true, tagNumber: true },
         })
-      : await prisma.pig.findMany({
-          where: { farmId, id: requireString(formData, "pigId") },
+      : await prisma.animal.findMany({
+          where: { farmId, id: requireString(formData, "animalId") },
           select: { id: true, dateOfBirth: true, tagNumber: true },
         });
 
-  if (pigs.length === 0) {
+  if (animals.length === 0) {
     throw new Error(
       scope === "PEN"
         ? "That pen has no active animals to vaccinate"
@@ -104,17 +104,17 @@ export async function recordVaccination(formData: FormData): Promise<void> {
     );
   }
 
-  for (const pig of pigs) {
-    if (fields.administeredAt < startOfDay(pig.dateOfBirth)) {
-      throw new Error(`Pig ${pig.tagNumber} was not born until after this vaccination date`);
+  for (const animal of animals) {
+    if (fields.administeredAt < startOfDay(animal.dateOfBirth)) {
+      throw new Error(`Animal ${animal.tagNumber} was not born until after this vaccination date`);
     }
   }
 
   await prisma.$transaction(
-    pigs.map((pig) =>
+    animals.map((animal) =>
       prisma.vaccinationRecord.create({
         data: {
-          pigId: pig.id,
+          animalId: animal.id,
           protocolItemId: fields.protocolItemId,
           vaccineName: fields.vaccineName,
           administeredAt: fields.administeredAt,
@@ -131,7 +131,7 @@ export async function recordVaccination(formData: FormData): Promise<void> {
 
   revalidatePath("/health/vaccinations");
   revalidatePath("/health");
-  for (const pig of pigs) revalidatePath(`/animals/${pig.id}`);
+  for (const animal of animals) revalidatePath(`/animals/${animal.id}`);
 }
 
 export async function updateVaccination(formData: FormData): Promise<void> {
@@ -140,13 +140,13 @@ export async function updateVaccination(formData: FormData): Promise<void> {
 
   const id = requireString(formData, "id");
   const existing = await prisma.vaccinationRecord.findFirst({
-    where: { id, pig: { farmId } },
-    select: { id: true, pigId: true, pig: { select: { dateOfBirth: true } } },
+    where: { id, animal: { farmId } },
+    select: { id: true, animalId: true, animal: { select: { dateOfBirth: true } } },
   });
   if (!existing) throw new Error("Vaccination record not found on this farm");
 
   const fields = await readFields(formData, farmId);
-  if (fields.administeredAt < startOfDay(existing.pig.dateOfBirth)) {
+  if (fields.administeredAt < startOfDay(existing.animal.dateOfBirth)) {
     throw new Error("Vaccination date cannot be before the animal was born");
   }
 
@@ -165,7 +165,7 @@ export async function updateVaccination(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/health/vaccinations");
-  revalidatePath(`/animals/${existing.pigId}`);
+  revalidatePath(`/animals/${existing.animalId}`);
 }
 
 export async function deleteVaccination(formData: FormData): Promise<void> {
@@ -174,13 +174,13 @@ export async function deleteVaccination(formData: FormData): Promise<void> {
 
   const id = requireString(formData, "id");
   const existing = await prisma.vaccinationRecord.findFirst({
-    where: { id, pig: { farmId } },
-    select: { id: true, pigId: true },
+    where: { id, animal: { farmId } },
+    select: { id: true, animalId: true },
   });
   if (!existing) throw new Error("Vaccination record not found on this farm");
 
   await prisma.vaccinationRecord.delete({ where: { id: existing.id } });
 
   revalidatePath("/health/vaccinations");
-  revalidatePath(`/animals/${existing.pigId}`);
+  revalidatePath(`/animals/${existing.animalId}`);
 }

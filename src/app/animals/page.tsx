@@ -8,7 +8,7 @@ import { requireUser, WRITE_ROLES } from "@/lib/auth";
 import { getActiveFarmId } from "@/lib/active-farm";
 import { getAnimalFilterOptions, listAnimals, type AnimalFilters as Filters } from "@/lib/db/animals";
 import { PIG_STATUS_LABELS, LIFE_STAGE_LABELS, SEX_LABELS } from "@/lib/labels";
-import type { LifeStage, PigStatus, Sex } from "@prisma/client";
+import type { LifeStage, AnimalStatus, Sex } from "@prisma/client";
 
 /** Reads one query-string value, ignoring the repeated-param array form. */
 function single(value: string | string[] | undefined): string {
@@ -42,7 +42,7 @@ export default async function AnimalsPage({ searchParams }: PageProps<"/animals"
   const q = single(params.q);
 
   const filters: Filters = {
-    status: statusParam === "ALL" ? "ALL" : asEnum<PigStatus>(statusParam, PIG_STATUS_LABELS),
+    status: statusParam === "ALL" ? "ALL" : asEnum<AnimalStatus>(statusParam, PIG_STATUS_LABELS),
     sex: asEnum<Sex>(sexParam, SEX_LABELS),
     lifeStage: asEnum<LifeStage>(lifeStageParam, LIFE_STAGE_LABELS),
     breed: breed || undefined,

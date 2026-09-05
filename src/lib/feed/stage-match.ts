@@ -14,13 +14,13 @@ import { FEED_CLASSIFICATION_LABELS, LIFE_STAGE_LABELS } from "@/lib/labels";
 
 /** Classifications that suit each production stage. */
 const STAGE_FEEDS: Record<LifeStage, FeedClassification[]> = {
-  PIGLET: ["STARTER"],
+  YOUNG: ["STARTER"],
   WEANER: ["WEANER", "STARTER"],
   GROWER: ["GROWER"],
   FINISHER: ["FINISHER", "GROWER"],
-  GILT: ["GESTATION", "GROWER", "FINISHER"],
-  SOW: ["GESTATION", "LACTATION"],
-  BOAR: ["BOAR", "GESTATION"],
+  MAIDEN_FEMALE: ["GESTATION", "GROWER", "FINISHER"],
+  BREEDING_FEMALE: ["GESTATION", "LACTATION"],
+  BREEDING_MALE: ["BREEDING_MALE", "GESTATION"],
 };
 
 /** The classification a stage should normally be on. */
@@ -40,7 +40,7 @@ export function classificationSuitsStage(
 /**
  * Returns a human-readable warning when the feed does not suit the animals it
  * is going to, or null when it does. Takes a stage tally so a mixed pen
- * produces one message rather than one per pig.
+ * produces one message rather than one per animal.
  */
 export function stageMismatchWarning(
   classification: FeedClassification,

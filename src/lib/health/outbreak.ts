@@ -12,12 +12,12 @@ import { REPRODUCTIVE_FAILURE_DIAGNOSES, findCondition } from "@/lib/health/cond
  * query health records in the db layer where the project conventions put it.
  *
  * The unit of counting is the ANIMAL, not the record. Three follow-up visits
- * to one coughing pig is one sick pig, not an outbreak; the whole point of the
+ * to one coughing animal is one sick animal, not an outbreak; the whole point of the
  * alert is that a condition has jumped between animals.
  */
 
 export type OutbreakCase = {
-  pigId: string;
+  animalId: string;
   tagNumber: string;
   diagnosis: string;
   category: HealthCategory;
@@ -59,7 +59,7 @@ export type OutbreakAlert = {
   severity: "WATCH" | "ALERT";
   /** Operator-facing next step. */
   recommendation: string;
-  affectedAnimals: { pigId: string; tagNumber: string }[];
+  affectedAnimals: { animalId: string; tagNumber: string }[];
 };
 
 const UNASSIGNED_PEN = "Unassigned";
@@ -236,31 +236,31 @@ export function detectMortalitySpike(
 
 // ---------------------------------------------------------------------------
 
-function distinctAnimals(group: readonly OutbreakCase[]): { pigId: string; tagNumber: string }[] {
+function distinctAnimals(group: readonly OutbreakCase[]): { animalId: string; tagNumber: string }[] {
   const seen = new Map<string, string>();
   for (const item of group) {
-    if (!seen.has(item.pigId)) seen.set(item.pigId, item.tagNumber);
+    if (!seen.has(item.animalId)) seen.set(item.animalId, item.tagNumber);
   }
-  return [...seen].map(([pigId, tagNumber]) => ({ pigId, tagNumber }));
+  return [...seen].map(([animalId, tagNumber]) => ({ animalId, tagNumber }));
 }
 
 function summarisePens(group: readonly OutbreakCase[]): AffectedPen[] {
-  const pens = new Map<string, { penId: string | null; penName: string; pigIds: Set<string> }>();
+  const pens = new Map<string, { penId: string | null; penName: string; animalIds: Set<string> }>();
   for (const item of group) {
     const mapKey = item.penId ?? "__none__";
     const entry = pens.get(mapKey) ?? {
       penId: item.penId,
       penName: item.penName ?? UNASSIGNED_PEN,
-      pigIds: new Set<string>(),
+      animalIds: new Set<string>(),
     };
-    entry.pigIds.add(item.pigId);
+    entry.animalIds.add(item.animalId);
     pens.set(mapKey, entry);
   }
   return [...pens.values()]
     .map((entry) => ({
       penId: entry.penId,
       penName: entry.penName,
-      animalCount: entry.pigIds.size,
+      animalCount: entry.animalIds.size,
     }))
     .sort((a, b) => b.animalCount - a.animalCount);
 }
@@ -280,7 +280,7 @@ function buildAlert({
   id: string;
   diagnosis: string;
   group: readonly OutbreakCase[];
-  animals: { pigId: string; tagNumber: string }[];
+  animals: { animalId: string; tagNumber: string }[];
   caseThreshold: number;
   windowDays: number;
   categoryOverride?: HealthCategory;

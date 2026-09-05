@@ -90,8 +90,8 @@ export function OutbreakAlerts({
               <dd className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs">
                 {alert.affectedAnimals.map((animal) => (
                   <Link
-                    key={animal.pigId}
-                    href={`/animals/${animal.pigId}`}
+                    key={animal.animalId}
+                    href={`/animals/${animal.animalId}`}
                     className="underline decoration-dotted underline-offset-2 text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100"
                   >
                     {animal.tagNumber}

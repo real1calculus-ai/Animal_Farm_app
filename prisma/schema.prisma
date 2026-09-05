@@ -1,4 +1,4 @@
-// Pig Farm Management System — data model.
+// Animal Farm Management System — data model.
 //
 // Money is stored as integer minor units (kobo/cents) in `*Cents` fields and
 // formatted at the edges via `src/lib/format.ts`, never as floats — the same
@@ -41,7 +41,61 @@ enum Sex {
   FEMALE
 }
 
-enum PigStatus {
+/// How a species is counted on the farm.
+///
+/// The distinction is not cosmetic: you name and pedigree a sow, but nobody
+/// names broiler #4,127. Forcing 500 birds into 500 individual rows would be
+/// possible and operationally useless — mortality, feed and revenue for a
+/// flock are group facts, and the screens that read them are different screens.
+enum TrackingMode {
+  /// Named, pedigreed, weighed individually — pigs, goats, sheep, cattle.
+  INDIVIDUAL
+  /// Stocked and sold as a group — poultry, catfish, snails.
+  BATCH
+  /// Breeding stock tracked individually, growers as groups — rabbits,
+  /// grasscutters, where does are named but fryers are counted.
+  HYBRID
+}
+
+/// Whether a species is farmed for output or kept to do a job.
+enum SpeciesPurpose {
+  /// Raised for meat, milk, eggs or breeding stock. Appears in production and
+  /// profitability reporting.
+  LIVESTOCK
+  /// Guard and working animals. Health and vaccination records matter, but
+  /// they are never sold, never enter the food chain, and must never appear in
+  /// cost-per-kg-of-gain — a dog in a production report is a bug.
+  WORKING
+}
+
+enum BatchStatus {
+  ACTIVE
+  SOLD
+  CLOSED
+}
+
+enum BatchEventType {
+  /// Birds, fingerlings or snails placed into the batch.
+  STOCKED
+  MORTALITY
+  CULL
+  /// Moved out to another batch or pen.
+  TRANSFER_OUT
+  TRANSFER_IN
+  SALE
+  /// A weight sample taken across part of the batch.
+  WEIGHT_SAMPLE
+}
+
+/// What a batch produces on an ongoing basis, as opposed to at slaughter.
+enum BatchProductionType {
+  EGGS
+  MILK
+  /// Snail slime, wool, and anything else measured per collection.
+  OTHER
+}
+
+enum AnimalStatus {
   ACTIVE
   SOLD
   DECEASED
@@ -69,7 +123,7 @@ enum HousingType {
   NURSERY
   GROWER
   FINISHER
-  BOAR
+  BREEDING_MALE
   ISOLATION
   QUARANTINE
 }
@@ -78,13 +132,13 @@ enum HousingType {
 /// also stored on feeding programs and vaccination protocol rows, which target
 /// a stage rather than an individual animal.
 enum LifeStage {
-  PIGLET
+  YOUNG
   WEANER
   GROWER
   FINISHER
-  GILT
-  SOW
-  BOAR
+  MAIDEN_FEMALE
+  BREEDING_FEMALE
+  BREEDING_MALE
 }
 
 enum BreedingMethod {
@@ -154,7 +208,7 @@ enum FeedClassification {
   FINISHER
   GESTATION
   LACTATION
-  BOAR
+  BREEDING_MALE
   SUPPLEMENT
 }
 
@@ -178,7 +232,7 @@ enum TransactionCategory {
   TRANSPORT
   MARKETING
   OTHER_EXPENSE
-  PIGLET_SALE
+  YOUNG_STOCK_SALE
   FINISHED_PIG_SALE
   CULL_SALE
   BREEDING_STOCK_SALE
@@ -187,7 +241,7 @@ enum TransactionCategory {
 }
 
 enum AnimalSaleType {
-  FEEDER_PIG
+  FEEDER
   FINISHED_PIG
   BREEDING_STOCK
   CULL
@@ -231,16 +285,18 @@ enum AlertSeverity {
 // ---------------------------------------------------------------------------
 
 model Farm {
-  id        String   @id @default(cuid())
-  name      String   @unique
+  species   Species[]
+  batches   AnimalBatch[]
+  id        String        @id @default(cuid())
+  name      String        @unique
   location  String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
+  isActive  Boolean       @default(true)
+  createdAt DateTime      @default(now())
 
   settings FarmSettings?
 
   profiles             Profile[]
-  pigs                 Pig[]
+  animals              Animal[]
   pens                 Pen[]
   breedingRecords      BreedingRecord[]
   healthRecords        HealthRecord[]
@@ -305,14 +361,16 @@ model FarmSettings {
 /// Mirrors the Supabase auth user (`Profile.id` IS the Supabase user id).
 /// Auth lives in Supabase; everything role- and farm-related lives here.
 model Profile {
-  id        String   @id
-  email     String
-  name      String
-  role      Role     @default(WORKER)
-  farmId    String?
-  farm      Farm?    @relation(fields: [farmId], references: [id], onDelete: SetNull)
-  approved  Boolean  @default(false)
-  createdAt DateTime @default(now())
+  batchEvents     BatchEvent[]            @relation("BatchEventCreatedBy")
+  batchProduction BatchProductionRecord[] @relation("BatchProductionCreatedBy")
+  id              String                  @id
+  email           String
+  name            String
+  role            Role                    @default(WORKER)
+  farmId          String?
+  farm            Farm?                   @relation(fields: [farmId], references: [id], onDelete: SetNull)
+  approved        Boolean                 @default(false)
+  createdAt       DateTime                @default(now())
 
   // Audit-attribution back-relations. Each model below has a single FK to
   // Profile, so each needs exactly one named relation here.
@@ -339,10 +397,13 @@ model Profile {
 // Animals
 // ---------------------------------------------------------------------------
 
-model Pig {
+model Animal {
   id     String @id @default(cuid())
   farmId String
   farm   Farm   @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  speciesId String
+  species   Species @relation(fields: [speciesId], references: [id], onDelete: Restrict)
 
   /// Ear-tag / visible identifier. Unique per farm, not globally — two farms
   /// numbering their animals from 1 is entirely normal.
@@ -351,15 +412,15 @@ model Pig {
   breed       String
   dateOfBirth DateTime
   sex         Sex
-  status      PigStatus @default(ACTIVE)
+  status      AnimalStatus @default(ACTIVE)
 
   // --- Pedigree ---------------------------------------------------------
   motherId          String?
-  mother            Pig?    @relation("PigMother", fields: [motherId], references: [id], onDelete: SetNull)
-  offspringAsMother Pig[]   @relation("PigMother")
+  mother            Animal?  @relation("AnimalMother", fields: [motherId], references: [id], onDelete: SetNull)
+  offspringAsMother Animal[] @relation("AnimalMother")
   fatherId          String?
-  father            Pig?    @relation("PigFather", fields: [fatherId], references: [id], onDelete: SetNull)
-  offspringAsFather Pig[]   @relation("PigFather")
+  father            Animal?  @relation("AnimalFather", fields: [fatherId], references: [id], onDelete: SetNull)
+  offspringAsFather Animal[] @relation("AnimalFather")
 
   /// 0 for founder animals (no recorded parents), otherwise 1 + max(parents).
   /// Denormalised on write so generation-depth reporting doesn't have to walk
@@ -410,6 +471,7 @@ model Pig {
   transactions       FinancialTransaction[]
 
   @@unique([farmId, tagNumber])
+  @@index([speciesId, status])
   @@index([farmId, status])
   @@index([motherId])
   @@index([fatherId])
@@ -418,12 +480,12 @@ model Pig {
   @@index([dateOfBirth])
 }
 
-/// Weigh-in history. `Pig.currentWeightKg` is the latest of these, denormalised
+/// Weigh-in history. `Animal.currentWeightKg` is the latest of these, denormalised
 /// for list views; this table is what ADG and growth curves are computed from.
 model WeightRecord {
-  id    String @id @default(cuid())
-  pigId String
-  pig   Pig    @relation(fields: [pigId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  animalId String
+  animal   Animal @relation(fields: [animalId], references: [id], onDelete: Cascade)
 
   recordedAt         DateTime
   weightKg           Float
@@ -435,7 +497,7 @@ model WeightRecord {
 
   createdAt DateTime @default(now())
 
-  @@index([pigId, recordedAt])
+  @@index([animalId, recordedAt])
 }
 
 // ---------------------------------------------------------------------------
@@ -443,9 +505,10 @@ model WeightRecord {
 // ---------------------------------------------------------------------------
 
 model Pen {
-  id     String @id @default(cuid())
-  farmId String
-  farm   Farm   @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  batches AnimalBatch[]
+  id      String        @id @default(cuid())
+  farmId  String
+  farm    Farm          @relation(fields: [farmId], references: [id], onDelete: Cascade)
 
   name        String
   housingType HousingType
@@ -456,7 +519,7 @@ model Pen {
 
   createdAt DateTime @default(now())
 
-  pigs           Pig[]
+  animals        Animal[]
   movements      PenMovement[]
   tasks          PenTask[]
   feedingRecords FeedingRecord[]
@@ -468,9 +531,9 @@ model Pen {
 /// Occupancy history. Written on every move so pen-level exposure can be
 /// reconstructed for biosecurity/contact-tracing after a disease event.
 model PenMovement {
-  id    String @id @default(cuid())
-  pigId String
-  pig   Pig    @relation(fields: [pigId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  animalId String
+  animal   Animal @relation(fields: [animalId], references: [id], onDelete: Cascade)
 
   penId       String?
   pen         Pen?    @relation(fields: [penId], references: [id], onDelete: SetNull)
@@ -486,7 +549,7 @@ model PenMovement {
 
   createdAt DateTime @default(now())
 
-  @@index([pigId, movedAt])
+  @@index([animalId, movedAt])
   @@index([penId, movedAt])
 }
 
@@ -520,9 +583,9 @@ model BreedingRecord {
   farm   Farm   @relation(fields: [farmId], references: [id], onDelete: Cascade)
 
   damId  String
-  dam    Pig    @relation("BreedingDam", fields: [damId], references: [id], onDelete: Cascade)
+  dam    Animal @relation("BreedingDam", fields: [damId], references: [id], onDelete: Cascade)
   sireId String
-  sire   Pig    @relation("BreedingSire", fields: [sireId], references: [id], onDelete: Cascade)
+  sire   Animal @relation("BreedingSire", fields: [sireId], references: [id], onDelete: Cascade)
 
   breedingDate DateTime
   method       BreedingMethod @default(NATURAL)
@@ -532,11 +595,11 @@ model BreedingRecord {
   /// even if the farm later changes its gestation setting.
   expectedFarrowingDate DateTime
 
-  pregnancyStatus     PregnancyStatus     @default(PENDING)
-  confirmationMethod  ConfirmationMethod?
-  confirmationDate    DateTime?
-  expectedPigletCount Int?
-  abnormalitiesNoted  String?
+  pregnancyStatus        PregnancyStatus     @default(PENDING)
+  confirmationMethod     ConfirmationMethod?
+  confirmationDate       DateTime?
+  expectedOffspringCount Int?
+  abnormalitiesNoted     String?
 
   /// Wright's F of the *hypothetical offspring* of this pairing, captured at
   /// the moment of mating. Kept as a historical record: it is what the decision
@@ -564,8 +627,8 @@ model BreedingRecord {
 }
 
 /// The farrowing event and its outcome. One per BreedingRecord that reaches
-/// term. Individual piglets are `Pig` rows pointing back here via
-/// `Pig.litterId` — a piglet is an animal from birth, not a separate entity
+/// term. Individual offspring are `Animal` rows pointing back here via
+/// `Animal.litterId` — a piglet is an animal from birth, not a separate entity
 /// that later gets promoted, which is what keeps pedigree continuous.
 model Litter {
   id               String         @id @default(cuid())
@@ -593,7 +656,7 @@ model Litter {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  piglets Pig[]
+  offspring Animal[]
 
   @@index([farrowingDate])
 }
@@ -603,7 +666,7 @@ model Litter {
 model EstrusRecord {
   id    String @id @default(cuid())
   sowId String
-  sow   Pig    @relation(fields: [sowId], references: [id], onDelete: Cascade)
+  sow   Animal @relation(fields: [sowId], references: [id], onDelete: Cascade)
 
   observedAt DateTime
 
@@ -633,8 +696,13 @@ model HealthRecord {
   farmId String
   farm   Farm   @relation(fields: [farmId], references: [id], onDelete: Cascade)
 
-  pigId String
-  pig   Pig    @relation(fields: [pigId], references: [id], onDelete: Cascade)
+  /// Exactly one of animalId or batchId is set: a treatment is given either to
+  /// a named animal or to a whole flock. Both null would be an orphan record;
+  /// both set would make "which animals were treated" unanswerable.
+  animalId String?
+  animal   Animal?      @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  batchId  String?
+  batch    AnimalBatch? @relation(fields: [batchId], references: [id], onDelete: Cascade)
 
   recordedAt DateTime
   recordType HealthRecordType
@@ -659,7 +727,8 @@ model HealthRecord {
   medications Medication[]
 
   @@index([farmId, recordedAt])
-  @@index([pigId, recordedAt])
+  @@index([animalId, recordedAt])
+  @@index([batchId, recordedAt])
   @@index([farmId, category, recordedAt])
   @@index([farmId, diagnosis, recordedAt])
 }
@@ -695,9 +764,12 @@ model Medication {
 /// The farm's standing vaccination protocol — the schedule template, not the
 /// events. Each row says "animals at this stage/age get this vaccine".
 model VaccinationProtocolItem {
-  id     String @id @default(cuid())
-  farmId String
-  farm   Farm   @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  /// Null means the protocol applies to every species on the farm.
+  speciesId String?
+  species   Species? @relation(fields: [speciesId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  farmId    String
+  farm      Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
 
   name                String
   vaccineName         String
@@ -718,9 +790,9 @@ model VaccinationProtocolItem {
 }
 
 model VaccinationRecord {
-  id    String @id @default(cuid())
-  pigId String
-  pig   Pig    @relation(fields: [pigId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  animalId String
+  animal   Animal @relation(fields: [animalId], references: [id], onDelete: Cascade)
 
   protocolItemId String?
   protocolItem   VaccinationProtocolItem? @relation(fields: [protocolItemId], references: [id], onDelete: SetNull)
@@ -739,7 +811,7 @@ model VaccinationRecord {
 
   createdAt DateTime @default(now())
 
-  @@index([pigId, administeredAt])
+  @@index([animalId, administeredAt])
   @@index([nextDueDate])
   @@index([lotNumber])
 }
@@ -873,6 +945,8 @@ model FeedingProgram {
   farm   Farm   @relation(fields: [farmId], references: [id], onDelete: Cascade)
 
   name       String
+  speciesId  String?
+  species    Species?  @relation(fields: [speciesId], references: [id], onDelete: Cascade)
   stage      LifeStage
   feedTypeId String
   feedType   FeedType  @relation(fields: [feedTypeId], references: [id], onDelete: Cascade)
@@ -896,18 +970,21 @@ model FeedingProgram {
 /// the normal case on a real farm; individual records exist for animals under
 /// observation. Cost allocation splits a pen record across its occupants.
 model FeedingRecord {
-  id     String @id @default(cuid())
-  farmId String
-  farm   Farm   @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  /// Feed given to a whole batch — a house of broilers or a pond of catfish.
+  batchId String?
+  batch   AnimalBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  id      String       @id @default(cuid())
+  farmId  String
+  farm    Farm         @relation(fields: [farmId], references: [id], onDelete: Cascade)
 
   fedAt DateTime
 
   penId       String?
   pen         Pen?    @relation(fields: [penId], references: [id], onDelete: SetNull)
-  pigId       String?
-  pig         Pig?    @relation(fields: [pigId], references: [id], onDelete: SetNull)
+  animalId    String?
+  animal      Animal? @relation(fields: [animalId], references: [id], onDelete: SetNull)
   /// Number of animals the allocation covered, captured at feeding time so
-  /// historical cost-per-animal doesn't shift as pigs move between pens.
+  /// historical cost-per-animal doesn't shift as animals move between pens.
   animalCount Int     @default(1)
 
   feedTypeId  String
@@ -928,7 +1005,7 @@ model FeedingRecord {
 
   @@index([farmId, fedAt])
   @@index([penId, fedAt])
-  @@index([pigId, fedAt])
+  @@index([animalId, fedAt])
   @@index([feedBatchId])
 }
 
@@ -952,8 +1029,8 @@ model FinancialTransaction {
 
   // Optional provenance links — set when a row was generated by another
   // module, null for manually entered costs like labour or utilities.
-  pigId          String?
-  pig            Pig?        @relation(fields: [pigId], references: [id], onDelete: SetNull)
+  animalId       String?
+  animal         Animal?     @relation(fields: [animalId], references: [id], onDelete: SetNull)
   feedBatchId    String?
   healthRecordId String?
   animalSaleId   String?
@@ -968,7 +1045,7 @@ model FinancialTransaction {
   @@index([farmId, occurredAt])
   @@index([farmId, direction, occurredAt])
   @@index([farmId, category, occurredAt])
-  @@index([pigId])
+  @@index([animalId])
 }
 
 model AnimalSale {
@@ -999,16 +1076,16 @@ model AnimalSaleItem {
   saleId String
   sale   AnimalSale @relation(fields: [saleId], references: [id], onDelete: Cascade)
 
-  pigId String
-  pig   Pig    @relation(fields: [pigId], references: [id], onDelete: Cascade)
+  animalId String
+  animal   Animal @relation(fields: [animalId], references: [id], onDelete: Cascade)
 
   weightKg        Float
   pricePerKgCents Int
   amountCents     Int
   carcassGrade    String?
 
-  @@unique([saleId, pigId])
-  @@index([pigId])
+  @@unique([saleId, animalId])
+  @@index([animalId])
 }
 
 // ---------------------------------------------------------------------------
@@ -1108,4 +1185,190 @@ model AuditLog {
 
   @@index([farmId, createdAt])
   @@index([entityType, entityId])
+}
+
+// ---------------------------------------------------------------------------
+// Species
+// ---------------------------------------------------------------------------
+
+/// A species the farm keeps, with the biology that drives every date the app
+/// projects.
+///
+/// These were constants when the system handled pigs only. They are rows now
+/// because they are facts about the animal, not preferences of the farm: a
+/// goat gestates for 150 days whoever owns her. Getting one wrong quietly
+/// misdates every farrowing, weaning and heat prediction for that species,
+/// which is why the seeded defaults carry their real-world figures and the
+/// farm can correct them without a deploy.
+model Species {
+  id     String @id @default(cuid())
+  farmId String
+  farm   Farm   @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  name         String
+  /// Stable short code used in tag prefixes, e.g. "PIG", "GOA", "BRO".
+  code         String
+  trackingMode TrackingMode   @default(INDIVIDUAL)
+  purpose      SpeciesPurpose @default(LIVESTOCK)
+  isActive     Boolean        @default(true)
+
+  // --- Reproduction -----------------------------------------------------
+  /// Days from mating to birth. For egg-laying species this is the incubation
+  /// period instead; null where the concept does not apply (fish, snails).
+  gestationDays            Int?
+  gestationToleranceDays   Int    @default(3)
+  estrusCycleDays          Int?
+  weaningAgeDays           Int?
+  minBreedingAgeDaysFemale Int?
+  minBreedingAgeDaysMale   Int?
+  minBreedingWeightKg      Float?
+  /// Typical number born per birth, used to sanity-check entered litter sizes.
+  typicalLitterSize        Int?
+
+  /// False for hermaphrodites — snails have no sex to record, and demanding
+  /// one would make every snail row carry a meaningless required field.
+  hasSex         Boolean @default(true)
+  /// False where pedigree is not tracked, which is most batch species.
+  tracksPedigree Boolean @default(true)
+
+  // --- Terminology ------------------------------------------------------
+  // Farmers do not say "the pig gave birth". Using the right word is the
+  // difference between software that reads as though it knows the job and
+  // software that reads as though it was written by someone who does not.
+  birthEventTerm  String @default("birth") // farrowing, kidding, lambing
+  youngTerm       String @default("young") // piglet, kid, lamb, calf
+  adultFemaleTerm String @default("female") // sow, doe, ewe, cow
+  adultMaleTerm   String @default("male") // boar, buck, ram, bull
+  groupTerm       String @default("group") // herd, flock, colony
+
+  /// Upper bound of the body condition scale — 5 for pigs and goats, 9 for
+  /// cattle. Scoring a cow on the pig scale is not a rounding error.
+  bodyConditionScaleMax Int @default(5)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  animals         Animal[]
+  batches         AnimalBatch[]
+  feedingPrograms FeedingProgram[]
+  protocolItems   VaccinationProtocolItem[]
+
+  @@unique([farmId, name])
+  @@unique([farmId, code])
+  @@index([farmId, trackingMode])
+}
+
+// ---------------------------------------------------------------------------
+// Batches — flock, pond and colony animals
+// ---------------------------------------------------------------------------
+
+/// A group of animals stocked, fed and sold together: a house of broilers, a
+/// pond of catfish, a pen of snails.
+///
+/// `currentCount` is denormalised from the event log rather than derived on
+/// every read. The log in `BatchEvent` is the authority — this column is a
+/// cache kept in the same transaction as the event that changes it, because
+/// "how many birds are alive right now" is asked on every list screen and
+/// summing a year of mortality rows to answer it would be absurd.
+model AnimalBatch {
+  id     String @id @default(cuid())
+  farmId String
+  farm   Farm   @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  speciesId String
+  species   Species @relation(fields: [speciesId], references: [id], onDelete: Restrict)
+
+  /// Human name, e.g. "Broiler house 2 — Aug intake".
+  name      String
+  batchCode String
+
+  penId String?
+  pen   Pen?    @relation(fields: [penId], references: [id], onDelete: SetNull)
+
+  status BatchStatus @default(ACTIVE)
+
+  startDate    DateTime
+  /// Age of the stock on arrival: day-olds are 0, point-of-lay pullets ~112.
+  startAgeDays Int       @default(0)
+  endDate      DateTime?
+
+  initialCount Int
+  currentCount Int
+
+  /// Where the stock came from — hatchery, supplier, own breeding.
+  source               String?
+  acquisitionCostCents Int?
+
+  /// Latest sampled average weight, for growth and FCR without weighing
+  /// every animal.
+  avgWeightKg Float?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events            BatchEvent[]
+  productionRecords BatchProductionRecord[]
+  feedingRecords    FeedingRecord[]
+  healthRecords     HealthRecord[]
+
+  @@unique([farmId, batchCode])
+  @@index([farmId, status])
+  @@index([speciesId])
+  @@index([penId])
+}
+
+/// Every change to a batch's headcount or weight. Append-only: the running
+/// count is rebuilt from here if it ever disagrees with the cached column.
+model BatchEvent {
+  id      String      @id @default(cuid())
+  batchId String
+  batch   AnimalBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  eventType  BatchEventType
+  occurredAt DateTime
+  /// Head count affected. Zero for a weight sample.
+  quantity   Int            @default(0)
+  /// Average weight in kg for a WEIGHT_SAMPLE, or per-animal weight at sale.
+  weightKg   Float?
+  /// Cause of death or reason for the cull — the field that turns a mortality
+  /// figure into something you can act on.
+  reason     String?
+  notes      String?
+
+  createdByProfileId String?
+  createdBy          Profile? @relation("BatchEventCreatedBy", fields: [createdByProfileId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([batchId, occurredAt])
+  @@index([eventType])
+}
+
+/// Ongoing output from a batch — eggs from layers, milk, snail slime. Distinct
+/// from a sale: this is production, which may be sold later or consumed.
+model BatchProductionRecord {
+  id      String      @id @default(cuid())
+  batchId String
+  batch   AnimalBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  productionType   BatchProductionType @default(EGGS)
+  collectedAt      DateTime
+  /// Eggs collected, litres of milk, kg of whatever the species yields.
+  quantity         Float
+  unit             String              @default("count")
+  /// Cracked, dirty or otherwise unsellable — lay percentage should be read
+  /// against total, but revenue only against saleable.
+  rejectedQuantity Float               @default(0)
+  notes            String?
+
+  createdByProfileId String?
+  createdBy          Profile? @relation("BatchProductionCreatedBy", fields: [createdByProfileId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([batchId, collectedAt])
 }

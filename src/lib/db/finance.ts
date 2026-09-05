@@ -184,13 +184,13 @@ const transactionSelect = {
   category: true,
   amountCents: true,
   description: true,
-  pigId: true,
+  animalId: true,
   feedBatchId: true,
   healthRecordId: true,
   animalSaleId: true,
   equipmentId: true,
   createdAt: true,
-  pig: { select: { id: true, tagNumber: true, name: true } },
+  animal: { select: { id: true, tagNumber: true, name: true } },
   createdBy: { select: { id: true, name: true } },
 } satisfies Prisma.FinancialTransactionSelect;
 
@@ -203,7 +203,7 @@ export type TransactionFilters = {
   category?: TransactionCategory;
   start?: Date;
   end?: Date;
-  pigId?: string;
+  animalId?: string;
   /** Substring match on the description. */
   search?: string;
 };
@@ -216,7 +216,7 @@ export function buildTransactionWhere(
 
   if (filters.direction) where.direction = filters.direction;
   if (filters.category) where.category = filters.category;
-  if (filters.pigId) where.pigId = filters.pigId;
+  if (filters.animalId) where.animalId = filters.animalId;
   if (filters.search) {
     where.description = { contains: filters.search, mode: "insensitive" };
   }
@@ -325,7 +325,7 @@ export async function resolveProvenance(
     healthRecordIds.length
       ? prisma.healthRecord.findMany({
           where: { id: { in: healthRecordIds } },
-          select: { id: true, diagnosis: true, pigId: true },
+          select: { id: true, diagnosis: true, animalId: true },
         })
       : Promise.resolve([]),
     equipmentIds.length
@@ -362,7 +362,7 @@ export async function resolveProvenance(
       result.set(row.id, {
         kind: "HEALTH",
         label: record ? `Health record — ${record.diagnosis}` : "Health record",
-        href: record ? `/animals/${record.pigId}` : "/health",
+        href: record ? `/animals/${record.animalId}` : "/health",
       });
     } else if (row.animalSaleId) {
       const sale = saleById.get(row.animalSaleId);
@@ -387,16 +387,16 @@ export async function resolveProvenance(
 /** Animals with a ledger row against them, for the transactions filter. */
 export async function listAnimalsWithTransactions(farmId: string) {
   const rows = await prisma.financialTransaction.findMany({
-    where: { farmId, pigId: { not: null } },
-    select: { pig: { select: { id: true, tagNumber: true, name: true } } },
-    distinct: ["pigId"],
+    where: { farmId, animalId: { not: null } },
+    select: { animal: { select: { id: true, tagNumber: true, name: true } } },
+    distinct: ["animalId"],
     orderBy: { occurredAt: "desc" },
     take: 300,
   });
 
   return rows
-    .map((row) => row.pig)
-    .filter((pig): pig is { id: string; tagNumber: string; name: string | null } => pig !== null)
+    .map((row) => row.animal)
+    .filter((animal): animal is { id: string; tagNumber: string; name: string | null } => animal !== null)
     .sort((a, b) => a.tagNumber.localeCompare(b.tagNumber, undefined, { numeric: true }));
 }
 
@@ -440,7 +440,7 @@ export async function getAnimalSale(farmId: string, id: string) {
     include: {
       items: {
         include: {
-          pig: { select: { id: true, tagNumber: true, name: true, breed: true, sex: true } },
+          animal: { select: { id: true, tagNumber: true, name: true, breed: true, sex: true } },
         },
       },
       createdBy: { select: { name: true } },
@@ -455,7 +455,7 @@ export async function getAnimalSale(farmId: string, id: string) {
  * the sale date, which is not known here.
  */
 export async function listSellableAnimals(farmId: string) {
-  return prisma.pig.findMany({
+  return prisma.animal.findMany({
     where: { farmId, status: "ACTIVE" },
     select: {
       id: true,
@@ -499,7 +499,7 @@ export async function getAverageSalePricePerKgCents(
  *
  * The animal set is scoped by the analysis window — animals sold inside it,
  * plus animals still on the farm — but their *costs* are gathered over each
- * animal's whole life, because "cost per pig from birth to sale" (§3.4) is a
+ * animal's whole life, because "cost per animal from birth to sale" (§3.4) is a
  * lifetime figure and clipping it to the window would understate every animal
  * that was born before the period started.
  */
@@ -508,7 +508,7 @@ export async function getProfitabilityInputs(
   window: { start: Date; end: Date },
   asOf: Date = new Date()
 ): Promise<ProfitabilityInputs> {
-  const pigRows = await prisma.pig.findMany({
+  const animalRows = await prisma.animal.findMany({
     where: {
       farmId,
       OR: [
@@ -539,10 +539,10 @@ export async function getProfitabilityInputs(
     },
   });
 
-  const pigIds = pigRows.map((p) => p.id);
-  if (pigIds.length === 0) {
+  const animalIds = animalRows.map((p) => p.id);
+  if (animalIds.length === 0) {
     return {
-      pigs: [],
+      animals: [],
       movements: [],
       health: [],
       feeding: [],
@@ -554,19 +554,19 @@ export async function getProfitabilityInputs(
     };
   }
 
-  const penIds = [...new Set(pigRows.map((p) => p.penId).filter(Boolean))] as string[];
+  const penIds = [...new Set(animalRows.map((p) => p.penId).filter(Boolean))] as string[];
 
   const [movements, healthRecords, feeding, saleItems, ledger, overhead, avgPrice] =
     await Promise.all([
       prisma.penMovement.findMany({
-        where: { pigId: { in: pigIds } },
-        select: { pigId: true, penId: true, movedAt: true },
+        where: { animalId: { in: animalIds } },
+        select: { animalId: true, penId: true, movedAt: true },
         orderBy: { movedAt: "asc" },
       }),
       prisma.healthRecord.findMany({
-        where: { farmId, pigId: { in: pigIds } },
+        where: { farmId, animalId: { in: animalIds } },
         select: {
-          pigId: true,
+          animalId: true,
           recordedAt: true,
           costCents: true,
           medications: { select: { costCents: true } },
@@ -576,13 +576,13 @@ export async function getProfitabilityInputs(
         where: {
           farmId,
           OR: [
-            { pigId: { in: pigIds } },
-            ...(penIds.length ? [{ penId: { in: penIds }, pigId: null }] : []),
+            { animalId: { in: animalIds } },
+            ...(penIds.length ? [{ penId: { in: penIds }, animalId: null }] : []),
           ],
         },
         select: {
           fedAt: true,
-          pigId: true,
+          animalId: true,
           penId: true,
           animalCount: true,
           allocatedKg: true,
@@ -591,9 +591,9 @@ export async function getProfitabilityInputs(
         },
       }),
       prisma.animalSaleItem.findMany({
-        where: { pigId: { in: pigIds }, sale: { farmId } },
+        where: { animalId: { in: animalIds }, sale: { farmId } },
         select: {
-          pigId: true,
+          animalId: true,
           weightKg: true,
           pricePerKgCents: true,
           amountCents: true,
@@ -602,9 +602,9 @@ export async function getProfitabilityInputs(
         },
       }),
       prisma.financialTransaction.findMany({
-        where: { farmId, direction: "EXPENSE", pigId: { in: pigIds } },
+        where: { farmId, direction: "EXPENSE", animalId: { in: animalIds } },
         select: {
-          pigId: true,
+          animalId: true,
           occurredAt: true,
           category: true,
           amountCents: true,
@@ -617,7 +617,7 @@ export async function getProfitabilityInputs(
         where: {
           farmId,
           direction: "EXPENSE",
-          pigId: null,
+          animalId: null,
           category: { in: OVERHEAD_CATEGORIES },
           occurredAt: { gte: window.start, lt: window.end },
         },
@@ -627,7 +627,7 @@ export async function getProfitabilityInputs(
     ]);
 
   return {
-    pigs: pigRows.map((p) => ({
+    animals: animalRows.map((p) => ({
       id: p.id,
       tagNumber: p.tagNumber,
       name: p.name,
@@ -649,15 +649,22 @@ export async function getProfitabilityInputs(
       fatherTag: p.father?.tagNumber ?? null,
     })),
     movements,
-    health: healthRecords.map((h) => ({
-      pigId: h.pigId,
-      recordedAt: h.recordedAt,
-      costCents: h.costCents,
-      medicationCents: h.medications.reduce((sum, m) => sum + m.costCents, 0),
-    })),
+    // Only animal-attributed treatments belong in per-animal cost. A flock
+    // treatment is a batch cost and is reported on the batch, not smeared
+    // across individuals that were never identified.
+    health: healthRecords.flatMap((h) =>
+      h.animalId === null
+        ? []
+        : [{
+            animalId: h.animalId,
+            recordedAt: h.recordedAt,
+            costCents: h.costCents,
+            medicationCents: h.medications.reduce((sum, m) => sum + m.costCents, 0),
+          }]
+    ),
     feeding,
     saleItems: saleItems.map((item) => ({
-      pigId: item.pigId,
+      animalId: item.animalId,
       soldAt: item.sale.soldAt,
       weightKg: item.weightKg,
       pricePerKgCents: item.pricePerKgCents,
@@ -665,7 +672,7 @@ export async function getProfitabilityInputs(
       saleId: item.saleId,
     })),
     ledger: ledger.map((row) => ({
-      pigId: row.pigId as string,
+      animalId: row.animalId as string,
       occurredAt: row.occurredAt,
       category: row.category,
       amountCents: row.amountCents,

@@ -126,7 +126,7 @@ export async function getBreedingRecord(farmId: string, id: string) {
       pregnancyStatus: true,
       confirmationMethod: true,
       confirmationDate: true,
-      expectedPigletCount: true,
+      expectedOffspringCount: true,
       abnormalitiesNoted: true,
       offspringInbreedingCoefficient: true,
       overrideReason: true,
@@ -144,7 +144,7 @@ export async function getBreedingRecord(farmId: string, id: string) {
           colostrumIntakeObserved: true,
           postFarrowingCheckNotes: true,
           notes: true,
-          piglets: {
+          offspring: {
             orderBy: { tagNumber: "asc" },
             select: {
               id: true,
@@ -170,7 +170,7 @@ export type BreedingRecordDetail = NonNullable<
 
 /** Active animals of one sex, for the dam/sire pickers and list filters. */
 export async function listBreedingCandidates(farmId: string, sex: Sex) {
-  return prisma.pig.findMany({
+  return prisma.animal.findMany({
     where: { farmId, sex, status: "ACTIVE" },
     orderBy: { tagNumber: "asc" },
     select: {
@@ -195,11 +195,11 @@ export type BreedingCandidate = Awaited<
 export type SowProductivity = {
   /** Litters farrowed. This is the animal's parity. */
   parity: number;
-  /** Lifetime pigs born, counting stillborn and mummified (LPB). */
-  lifetimePigsBorn: number;
+  /** Lifetime animals born, counting stillborn and mummified (LPB). */
+  lifetimeAnimalsBorn: number;
   lifetimeBornAlive: number;
-  /** Lifetime pigs weaned (LPW). */
-  lifetimePigsWeaned: number;
+  /** Lifetime animals weaned (LPW). */
+  lifetimeAnimalsWeaned: number;
   pigsBornPerLitter: number | null;
   pigsWeanedPerLitter: number | null;
   /** Mean days between consecutive farrowings. Null until a second litter. */
@@ -229,10 +229,10 @@ export async function getSowProductivity(
 
   const parity = litters.length;
   const lifetimeBornAlive = sum(litters.map((l) => l.bornAlive));
-  const lifetimePigsBorn = sum(litters.map((l) => l.bornAlive + l.stillborn + l.mummified));
+  const lifetimeAnimalsBorn = sum(litters.map((l) => l.bornAlive + l.stillborn + l.mummified));
 
   const weanedLitters = litters.filter((l) => l.weanedCount !== null);
-  const lifetimePigsWeaned = sum(weanedLitters.map((l) => l.weanedCount ?? 0));
+  const lifetimeAnimalsWeaned = sum(weanedLitters.map((l) => l.weanedCount ?? 0));
 
   // Farrowing interval is only meaningful once there are two farrowings to sit
   // between; reporting the age of a single litter as an "interval" would put a
@@ -246,14 +246,14 @@ export async function getSowProductivity(
 
   return {
     parity,
-    lifetimePigsBorn,
+    lifetimeAnimalsBorn,
     lifetimeBornAlive,
-    lifetimePigsWeaned,
-    pigsBornPerLitter: parity > 0 ? lifetimePigsBorn / parity : null,
-    pigsWeanedPerLitter: weanedLitters.length > 0 ? lifetimePigsWeaned / weanedLitters.length : null,
+    lifetimeAnimalsWeaned,
+    pigsBornPerLitter: parity > 0 ? lifetimeAnimalsBorn / parity : null,
+    pigsWeanedPerLitter: weanedLitters.length > 0 ? lifetimeAnimalsWeaned / weanedLitters.length : null,
     farrowingIntervalDays: intervals.length > 0 ? sum(intervals) / intervals.length : null,
     preWeaningMortality:
-      weanedBase > 0 ? Math.max(0, (weanedBase - lifetimePigsWeaned) / weanedBase) : null,
+      weanedBase > 0 ? Math.max(0, (weanedBase - lifetimeAnimalsWeaned) / weanedBase) : null,
     lastFarrowingDate: litters.length > 0 ? litters[litters.length - 1].farrowingDate : null,
     openBreedingId: open?.id ?? null,
   };
@@ -381,7 +381,7 @@ export async function listCalendarEvents(
         date: weaningDate,
         kind: "EXPECTED_WEANING",
         detail: record.litter.weaningDate
-          ? `Weaned — ${record.litter.weanedCount ?? 0} piglets`
+          ? `Weaned — ${record.litter.weanedCount ?? 0} offspring`
           : "Weaning due",
       });
     }
@@ -436,7 +436,7 @@ export async function getBreedingAttention(
         select: openBreedingSelect,
       })
       .then((rows) => rows as BreedingListRow[]),
-    prisma.pig.findMany({
+    prisma.animal.findMany({
       where: {
         farmId,
         sex: "FEMALE",
@@ -547,7 +547,7 @@ export async function getEstrusWatchlist(
   const ageCutoff = addDays(now, -settings.minBreedingAgeDaysFemale);
 
   const [females, latest, openBreedings, parityMap] = await Promise.all([
-    prisma.pig.findMany({
+    prisma.animal.findMany({
       where: { farmId, sex: "FEMALE", status: "ACTIVE", dateOfBirth: { lte: ageCutoff } },
       orderBy: { tagNumber: "asc" },
       select: { id: true, tagNumber: true, name: true },
@@ -641,11 +641,11 @@ export async function checkMating({
   const warnings: string[] = [];
 
   const [dam, sire] = await Promise.all([
-    prisma.pig.findFirst({
+    prisma.animal.findFirst({
       where: { id: damId, farmId },
       select: { id: true, tagNumber: true, name: true, breed: true, sex: true, status: true, dateOfBirth: true, currentWeightKg: true },
     }),
-    prisma.pig.findFirst({
+    prisma.animal.findFirst({
       where: { id: sireId, farmId },
       select: { id: true, tagNumber: true, name: true, breed: true, sex: true, status: true, dateOfBirth: true, currentWeightKg: true },
     }),
@@ -797,16 +797,16 @@ export async function checkMating({
 }
 
 // ---------------------------------------------------------------------------
-// Piglet registration helpers
+// Offspring registration helpers
 // ---------------------------------------------------------------------------
 
 /**
  * Breed string for a litter: the parents' breed when they share one, otherwise
- * an explicit cross. `Pig.breed` is free text precisely so a farm can record
+ * an explicit cross. `Animal.breed` is free text precisely so a farm can record
  * what it actually keeps, and silently inheriting the dam's breed would make a
  * crossbred litter look purebred in every report thereafter.
  */
-export function pigletBreed(damBreed: string, sireBreed: string): string {
+export function offspringBreed(damBreed: string, sireBreed: string): string {
   return damBreed === sireBreed ? damBreed : `${damBreed} × ${sireBreed}`;
 }
 
@@ -816,22 +816,22 @@ export function pigletBreed(damBreed: string, sireBreed: string): string {
  * editable field on the farrowing form, because plenty of farms number their
  * animals from a book rather than from a scheme.
  */
-export function pigletTagPrefix(damTagNumber: string, farrowingDate: Date): string {
+export function offspringTagPrefix(damTagNumber: string, farrowingDate: Date): string {
   const stamp = `${String(farrowingDate.getFullYear()).slice(2)}${String(farrowingDate.getMonth() + 1).padStart(2, "0")}`;
   return `${damTagNumber}-${stamp}-`;
 }
 
-export async function suggestPigletTags(
+export async function suggestOffspringTags(
   farmId: string,
   damTagNumber: string,
   farrowingDate: Date,
   count: number
 ): Promise<string[]> {
-  const prefix = pigletTagPrefix(damTagNumber, farrowingDate);
+  const prefix = offspringTagPrefix(damTagNumber, farrowingDate);
 
   const taken = new Set(
     (
-      await prisma.pig.findMany({
+      await prisma.animal.findMany({
         where: { farmId, tagNumber: { startsWith: prefix } },
         select: { tagNumber: true },
       })
@@ -852,7 +852,7 @@ export async function suggestPigletTags(
 /** Tag numbers from `tags` that already exist on the farm. */
 export async function findTagCollisions(farmId: string, tags: string[]): Promise<string[]> {
   if (tags.length === 0) return [];
-  const rows = await prisma.pig.findMany({
+  const rows = await prisma.animal.findMany({
     where: { farmId, tagNumber: { in: tags } },
     select: { tagNumber: true },
   });
@@ -875,6 +875,6 @@ function dedupe(values: string[]): string[] {
   return [...new Set(values)];
 }
 
-function summarise(pig: { id: string; tagNumber: string; name: string | null; breed: string }) {
-  return { id: pig.id, tagNumber: pig.tagNumber, name: pig.name, breed: pig.breed };
+function summarise(animal: { id: string; tagNumber: string; name: string | null; breed: string }) {
+  return { id: animal.id, tagNumber: animal.tagNumber, name: animal.name, breed: animal.breed };
 }

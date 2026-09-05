@@ -338,7 +338,7 @@ export async function getBatchDetail(farmId: string, id: string) {
         orderBy: { fedAt: "desc" },
         include: {
           pen: { select: { id: true, name: true } },
-          pig: { select: { id: true, tagNumber: true, name: true, status: true } },
+          animal: { select: { id: true, tagNumber: true, name: true, status: true } },
           recordedBy: { select: { name: true } },
         },
       },
@@ -371,7 +371,7 @@ export async function getAllocatableBatches(
 
 export type FeedingFilter = {
   penId?: string;
-  pigId?: string;
+  animalId?: string;
   feedTypeId?: string;
   feedBatchId?: string;
   from?: Date;
@@ -383,7 +383,7 @@ function feedingWhere(farmId: string, filter: FeedingFilter): Prisma.FeedingReco
   return {
     farmId,
     ...(filter.penId ? { penId: filter.penId } : {}),
-    ...(filter.pigId ? { pigId: filter.pigId } : {}),
+    ...(filter.animalId ? { animalId: filter.animalId } : {}),
     ...(filter.feedTypeId ? { feedTypeId: filter.feedTypeId } : {}),
     ...(filter.feedBatchId ? { feedBatchId: filter.feedBatchId } : {}),
     ...(filter.from || filter.to
@@ -406,7 +406,7 @@ export async function listFeedingRecords(farmId: string, filter: FeedingFilter =
       feedType: { select: { id: true, name: true, classification: true } },
       feedBatch: { select: { id: true, batchCode: true } },
       pen: { select: { id: true, name: true } },
-      pig: { select: { id: true, tagNumber: true, name: true } },
+      animal: { select: { id: true, tagNumber: true, name: true } },
       recordedBy: { select: { name: true } },
     },
   });
@@ -424,7 +424,7 @@ export async function getIntakeRecords(farmId: string, filter: FeedingFilter = {
       costPerKgCents: true,
       animalCount: true,
       penId: true,
-      pigId: true,
+      animalId: true,
       feedTypeId: true,
     },
   });
@@ -518,9 +518,9 @@ export async function getHerdWithStages(
   farmId: string,
   asOf: Date = new Date()
 ): Promise<HerdAnimal[]> {
-  const [settings, pigs, litters] = await Promise.all([
+  const [settings, animals, litters] = await Promise.all([
     getFarmSettings(farmId),
-    prisma.pig.findMany({
+    prisma.animal.findMany({
       where: { farmId, status: "ACTIVE" },
       orderBy: { tagNumber: "asc" },
       select: {
@@ -546,23 +546,23 @@ export async function getHerdWithStages(
     parityByDam.set(damId, (parityByDam.get(damId) ?? 0) + 1);
   }
 
-  return pigs.map((pig) => ({
-    id: pig.id,
-    tagNumber: pig.tagNumber,
-    name: pig.name,
-    sex: pig.sex,
-    dateOfBirth: pig.dateOfBirth,
-    ageDays: ageInDays(pig.dateOfBirth, asOf),
-    currentWeightKg: pig.currentWeightKg,
-    penId: pig.penId,
-    penName: pig.pen?.name ?? null,
+  return animals.map((animal) => ({
+    id: animal.id,
+    tagNumber: animal.tagNumber,
+    name: animal.name,
+    sex: animal.sex,
+    dateOfBirth: animal.dateOfBirth,
+    ageDays: ageInDays(animal.dateOfBirth, asOf),
+    currentWeightKg: animal.currentWeightKg,
+    penId: animal.penId,
+    penName: animal.pen?.name ?? null,
     stage: deriveLifeStage({
-      dateOfBirth: pig.dateOfBirth,
-      sex: pig.sex,
-      parity: parityByDam.get(pig.id) ?? 0,
+      dateOfBirth: animal.dateOfBirth,
+      sex: animal.sex,
+      parity: parityByDam.get(animal.id) ?? 0,
       weaningAgeDays: settings.weaningAgeDays,
       minBreedingAgeDays:
-        pig.sex === "FEMALE"
+        animal.sex === "FEMALE"
           ? settings.minBreedingAgeDaysFemale
           : settings.minBreedingAgeDaysMale,
       asOf,
@@ -637,16 +637,16 @@ export function stageTally(herd: readonly HerdAnimal[]): Map<LifeStage, number> 
 
 export async function getWeightRecords(
   farmId: string,
-  { pigIds, from, to }: { pigIds?: string[]; from?: Date; to?: Date } = {}
+  { animalIds, from, to }: { animalIds?: string[]; from?: Date; to?: Date } = {}
 ) {
   return prisma.weightRecord.findMany({
     where: {
-      pig: { farmId, ...(pigIds ? { id: { in: pigIds } } : {}) },
+      animal: { farmId, ...(animalIds ? { id: { in: animalIds } } : {}) },
       ...(from || to
         ? { recordedAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } }
         : {}),
     },
     orderBy: { recordedAt: "asc" },
-    select: { pigId: true, recordedAt: true, weightKg: true },
+    select: { animalId: true, recordedAt: true, weightKg: true },
   });
 }

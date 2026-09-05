@@ -27,7 +27,7 @@ export type PedigreeIndex = Map<string, PedigreeNode>;
 /** Loads every animal on the farm, including exited ones — dead ancestors are
  *  still ancestors, and dropping them would silently understate relatedness. */
 export async function loadPedigreeIndex(farmId: string): Promise<PedigreeIndex> {
-  const rows = await prisma.pig.findMany({
+  const rows = await prisma.animal.findMany({
     where: { farmId },
     select: {
       id: true,

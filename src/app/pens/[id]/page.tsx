@@ -109,20 +109,20 @@ export default async function PenDetailPage({ params }: PageProps<"/pens/[id]">)
               </Tr>
             </Thead>
             <Tbody>
-              {occupants.map((pig) => (
-                <Tr key={pig.id}>
+              {occupants.map((animal) => (
+                <Tr key={animal.id}>
                   <Td>
-                    <Link href={`/animals/${pig.id}`} className="font-medium underline underline-offset-2">
-                      {pig.tagNumber}
+                    <Link href={`/animals/${animal.id}`} className="font-medium underline underline-offset-2">
+                      {animal.tagNumber}
                     </Link>
-                    {pig.name ? (
-                      <span className="block text-xs text-zinc-500 dark:text-zinc-400">{pig.name}</span>
+                    {animal.name ? (
+                      <span className="block text-xs text-zinc-500 dark:text-zinc-400">{animal.name}</span>
                     ) : null}
                   </Td>
-                  <Td>{pig.breed}</Td>
-                  <Td>{SEX_LABELS[pig.sex]}</Td>
-                  <Td>{formatAge(pig.dateOfBirth)}</Td>
-                  <Td className="text-right tabular-nums">{formatKg(pig.currentWeightKg)}</Td>
+                  <Td>{animal.breed}</Td>
+                  <Td>{SEX_LABELS[animal.sex]}</Td>
+                  <Td>{formatAge(animal.dateOfBirth)}</Td>
+                  <Td className="text-right tabular-nums">{formatKg(animal.currentWeightKg)}</Td>
                 </Tr>
               ))}
             </Tbody>

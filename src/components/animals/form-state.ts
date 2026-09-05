@@ -73,10 +73,10 @@ type AnimalRowLike = {
 
 const num = (value: number | null): string => (value === null ? "" : String(value));
 
-export function animalFormValues(pig: AnimalRowLike | null): AnimalFormValues {
+export function animalFormValues(animal: AnimalRowLike | null): AnimalFormValues {
   const today = toDateInputValue(new Date());
 
-  if (!pig) {
+  if (!animal) {
     return {
       id: "",
       tagNumber: "",
@@ -104,29 +104,29 @@ export function animalFormValues(pig: AnimalRowLike | null): AnimalFormValues {
   }
 
   return {
-    id: pig.id,
-    tagNumber: pig.tagNumber,
-    name: pig.name ?? "",
-    breed: pig.breed,
-    dateOfBirth: toDateInputValue(pig.dateOfBirth),
-    sex: pig.sex,
-    status: pig.status,
-    motherId: pig.motherId ?? "",
-    fatherId: pig.fatherId ?? "",
-    penId: pig.penId ?? "",
-    birthWeightKg: num(pig.birthWeightKg),
-    markings: pig.markings ?? "",
-    currentWeightKg: num(pig.currentWeightKg),
-    bodyConditionScore: num(pig.bodyConditionScore),
-    congenitalDefects: pig.congenitalDefects ?? "",
-    phenotypeNotes: pig.phenotypeNotes ?? "",
-    acquisitionType: pig.acquisitionType,
-    dateAcquired: toDateInputValue(pig.dateAcquired),
+    id: animal.id,
+    tagNumber: animal.tagNumber,
+    name: animal.name ?? "",
+    breed: animal.breed,
+    dateOfBirth: toDateInputValue(animal.dateOfBirth),
+    sex: animal.sex,
+    status: animal.status,
+    motherId: animal.motherId ?? "",
+    fatherId: animal.fatherId ?? "",
+    penId: animal.penId ?? "",
+    birthWeightKg: num(animal.birthWeightKg),
+    markings: animal.markings ?? "",
+    currentWeightKg: num(animal.currentWeightKg),
+    bodyConditionScore: num(animal.bodyConditionScore),
+    congenitalDefects: animal.congenitalDefects ?? "",
+    phenotypeNotes: animal.phenotypeNotes ?? "",
+    acquisitionType: animal.acquisitionType,
+    dateAcquired: toDateInputValue(animal.dateAcquired),
     acquisitionCost:
-      pig.acquisitionCostCents === null ? "" : (pig.acquisitionCostCents / 100).toFixed(2),
-    dateExit: toDateInputValue(pig.dateExit),
-    exitReason: pig.exitReason ?? "",
-    exitNotes: pig.exitNotes ?? "",
+      animal.acquisitionCostCents === null ? "" : (animal.acquisitionCostCents / 100).toFixed(2),
+    dateExit: toDateInputValue(animal.dateExit),
+    exitReason: animal.exitReason ?? "",
+    exitNotes: animal.exitNotes ?? "",
   };
 }
 
@@ -142,7 +142,7 @@ export type ParentCandidate = {
   dateOfBirth: string;
 };
 
-export function toParentCandidate(pig: {
+export function toParentCandidate(animal: {
   id: string;
   tagNumber: string;
   name: string | null;
@@ -151,5 +151,5 @@ export function toParentCandidate(pig: {
   breed: string;
   dateOfBirth: Date;
 }): ParentCandidate {
-  return { ...pig, dateOfBirth: toDateInputValue(pig.dateOfBirth) };
+  return { ...animal, dateOfBirth: toDateInputValue(animal.dateOfBirth) };
 }

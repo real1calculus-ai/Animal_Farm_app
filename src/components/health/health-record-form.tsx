@@ -30,7 +30,7 @@ export type AnimalChoice = {
 
 export type HealthRecordInitial = {
   id?: string;
-  pigId: string;
+  animalId: string;
   recordedAt: string;
   recordType: string;
   category: string;
@@ -87,7 +87,7 @@ export function HealthRecordForm({
   initial?: HealthRecordInitial;
   cancelHref: string;
 }) {
-  const [pigId, setPigId] = useState(initial?.pigId ?? "");
+  const [animalId, setAnimalId] = useState(initial?.animalId ?? "");
   const [query, setQuery] = useState("");
   const [conditionKey, setConditionKey] = useState("");
   const [recordType, setRecordType] = useState(initial?.recordType ?? "ILLNESS");
@@ -100,7 +100,7 @@ export function HealthRecordForm({
   const [medications, setMedications] = useState<MedicationRow[]>([]);
   const [nextKey, setNextKey] = useState(1);
 
-  const selectedAnimal = animals.find((animal) => animal.id === pigId) ?? null;
+  const selectedAnimal = animals.find((animal) => animal.id === animalId) ?? null;
   const condition = useMemo(() => findCondition(diagnosis), [diagnosis]);
 
   const needle = query.trim().toLowerCase();
@@ -113,7 +113,7 @@ export function HealthRecordForm({
       )
     : animals;
   const selectionHidden =
-    selectedAnimal !== null && !filteredAnimals.some((animal) => animal.id === pigId);
+    selectedAnimal !== null && !filteredAnimals.some((animal) => animal.id === animalId);
 
   function applyCondition(value: string) {
     setConditionKey(value);
@@ -154,13 +154,13 @@ export function HealthRecordForm({
                 placeholder="Tag number, name or pen"
               />
             </Field>
-            <Field label="Animal" htmlFor="pigId" required>
+            <Field label="Animal" htmlFor="animalId" required>
               <Select
-                id="pigId"
-                name="pigId"
+                id="animalId"
+                name="animalId"
                 required
-                value={pigId}
-                onChange={(event) => setPigId(event.target.value)}
+                value={animalId}
+                onChange={(event) => setAnimalId(event.target.value)}
               >
                 <option value="">Select an animal</option>
                 {selectionHidden && selectedAnimal ? (
@@ -183,7 +183,7 @@ export function HealthRecordForm({
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
             {selectedAnimal ? (
               <>
-                Pig{" "}
+                Animal{" "}
                 <Link
                   href={`/animals/${selectedAnimal.id}`}
                   className="font-medium underline underline-offset-2"

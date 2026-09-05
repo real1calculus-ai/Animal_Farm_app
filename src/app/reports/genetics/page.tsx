@@ -32,7 +32,7 @@ export default async function GeneticsReportPage({ searchParams }: PageProps<"/r
 
   const [index, active] = await Promise.all([
     loadPedigreeIndex(farmId),
-    prisma.pig.findMany({
+    prisma.animal.findMany({
       where: { farmId, status: "ACTIVE" },
       select: { id: true, tagNumber: true, name: true, dateOfBirth: true, breed: true },
     }),
@@ -57,47 +57,47 @@ export default async function GeneticsReportPage({ searchParams }: PageProps<"/r
   const calculator = createInbreedingCalculator(index);
 
   const scored = active
-    .map((pig) => ({
-      ...pig,
-      f: calculator.inbreedingOf(pig.id),
-      completeness: pedigreeCompleteness(index, pig.id),
-      birthYear: pig.dateOfBirth.getUTCFullYear(),
+    .map((animal) => ({
+      ...animal,
+      f: calculator.inbreedingOf(animal.id),
+      completeness: pedigreeCompleteness(index, animal.id),
+      birthYear: animal.dateOfBirth.getUTCFullYear(),
     }))
     .sort((a, b) => b.f - a.f);
 
-  const herdF = scored.reduce((sum, pig) => sum + pig.f, 0) / scored.length;
+  const herdF = scored.reduce((sum, animal) => sum + animal.f, 0) / scored.length;
   const avgCompleteness =
-    scored.reduce((sum, pig) => sum + pig.completeness, 0) / scored.length;
+    scored.reduce((sum, animal) => sum + animal.completeness, 0) / scored.length;
 
   // Histogram of F across the herd.
   const buckets = BANDS.slice(0, -1).map((lower, i) => {
     const upper = BANDS[i + 1];
     return {
       label: `${(lower * 100).toFixed(1)}–${(upper * 100).toFixed(1)}%`,
-      count: scored.filter((pig) => pig.f >= lower && pig.f < upper).length,
+      count: scored.filter((animal) => animal.f >= lower && animal.f < upper).length,
     };
   });
   buckets.push({
     label: `${(BANDS[BANDS.length - 1] * 100).toFixed(0)}%+`,
-    count: scored.filter((pig) => pig.f >= BANDS[BANDS.length - 1]).length,
+    count: scored.filter((animal) => animal.f >= BANDS[BANDS.length - 1]).length,
   });
 
   // Average F by birth year. This is the number that says whether the herd is
   // narrowing: a rising line means each generation is more related than the
   // last, which no single mating's coefficient would ever reveal.
   const byYear = new Map<number, { total: number; count: number }>();
-  for (const pig of scored) {
-    const entry = byYear.get(pig.birthYear) ?? { total: 0, count: 0 };
-    entry.total += pig.f;
+  for (const animal of scored) {
+    const entry = byYear.get(animal.birthYear) ?? { total: 0, count: 0 };
+    entry.total += animal.f;
     entry.count += 1;
-    byYear.set(pig.birthYear, entry);
+    byYear.set(animal.birthYear, entry);
   }
   const years = [...byYear.keys()].sort((a, b) => a - b);
 
   // Founder contribution: how much of the herd descends from each ancestor.
   const contributions = new Map<string, number>();
-  for (const pig of scored) {
-    for (const ancestorId of ancestorsOf(index, pig.id).keys()) {
+  for (const animal of scored) {
+    for (const ancestorId of ancestorsOf(index, animal.id).keys()) {
       contributions.set(ancestorId, (contributions.get(ancestorId) ?? 0) + 1);
     }
   }
@@ -116,10 +116,10 @@ export default async function GeneticsReportPage({ searchParams }: PageProps<"/r
   // A crude estimate — it assumes random mating and equal contribution — but
   // the order of magnitude is what matters, and it is the figure conservation
   // guidance is written against.
-  const breedingMales = await prisma.pig.count({
+  const breedingMales = await prisma.animal.count({
     where: { farmId, sex: "MALE", status: "ACTIVE", breedingsAsSire: { some: {} } },
   });
-  const breedingFemales = await prisma.pig.count({
+  const breedingFemales = await prisma.animal.count({
     where: { farmId, sex: "FEMALE", status: "ACTIVE", breedingsAsDam: { some: {} } },
   });
   const effectivePopulation =
@@ -144,7 +144,7 @@ export default async function GeneticsReportPage({ searchParams }: PageProps<"/r
         />
         <StatTile
           label="Above the limit"
-          value={String(scored.filter((pig) => pig.f > settings.maxInbreedingCoefficient).length)}
+          value={String(scored.filter((animal) => animal.f > settings.maxInbreedingCoefficient).length)}
           hint={`of ${scored.length} active animals`}
         />
         <StatTile
@@ -255,30 +255,30 @@ export default async function GeneticsReportPage({ searchParams }: PageProps<"/r
               </Tr>
             </Thead>
             <Tbody>
-              {scored.slice(0, 15).map((pig) => {
+              {scored.slice(0, 15).map((animal) => {
                 const band = inbreedingBand(
-                  pig.f,
+                  animal.f,
                   settings.warnInbreedingCoefficient,
                   settings.maxInbreedingCoefficient
                 );
                 return (
-                  <Tr key={pig.id}>
+                  <Tr key={animal.id}>
                     <Td>
                       <Link
-                        href={`/animals/${pig.id}/pedigree`}
+                        href={`/animals/${animal.id}/pedigree`}
                         className="underline underline-offset-2"
                       >
-                        {pig.tagNumber}
+                        {animal.tagNumber}
                       </Link>
-                      {pig.name ? (
+                      {animal.name ? (
                         <span className="ml-1 text-xs text-zinc-500 dark:text-zinc-400">
-                          {pig.name}
+                          {animal.name}
                         </span>
                       ) : null}
                     </Td>
-                    <Td>{pig.breed}</Td>
-                    <Td className="text-right tabular-nums">{formatPercent(pig.f)}</Td>
-                    <Td className="text-right tabular-nums">{formatPercent(pig.completeness, 0)}</Td>
+                    <Td>{animal.breed}</Td>
+                    <Td className="text-right tabular-nums">{formatPercent(animal.f)}</Td>
+                    <Td className="text-right tabular-nums">{formatPercent(animal.completeness, 0)}</Td>
                     <Td>
                       <Badge variant={inbreedingBandVariant(band)}>{band}</Badge>
                     </Td>

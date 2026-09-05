@@ -9,8 +9,8 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Pig Farm Management",
-  description: "Breeding, health, feed and financial management for a working pig farm",
+  title: "Animal Farm Management",
+  description: "Breeding, health, feed and financial management for a working animal farm",
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {

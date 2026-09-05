@@ -40,7 +40,7 @@ import {
   getOngoingTreatments,
   listHealthRecords,
   listPenOptions,
-  listPigOptions,
+  listAnimalOptions,
 } from "@/lib/db/health";
 
 /**
@@ -63,19 +63,19 @@ export default async function HealthPage({ searchParams }: PageProps<"/health">)
     outcome: outcomeParam(params.outcome),
     recordType: recordTypeParam(params.recordType),
     penId: firstParam(params.penId),
-    pigId: firstParam(params.pigId),
+    animalId: firstParam(params.animalId),
     from: dateParam(params.from),
     to: dateParam(params.to),
     search: firstParam(params.q),
   };
 
-  const [records, ongoing, withdrawal, morbidity, pens, pigs] = await Promise.all([
+  const [records, ongoing, withdrawal, morbidity, pens, animals] = await Promise.all([
     listHealthRecords(farmId, filters),
     getOngoingTreatments(farmId),
     getAnimalsInWithdrawal(farmId),
     getMorbidity(farmId),
     listPenOptions(farmId),
-    listPigOptions(farmId, { includeInactive: true }),
+    listAnimalOptions(farmId, { includeInactive: true }),
   ]);
 
   const hasFilters = Object.values(filters).some((value) => value !== null);
@@ -152,13 +152,13 @@ export default async function HealthPage({ searchParams }: PageProps<"/health">)
                 <Tr key={row.recordId} className={severityRowClasses(row.severity, "ONGOING")}>
                   <Td>
                     <Link
-                      href={`/animals/${row.pigId}`}
+                      href={`/animals/${row.animalId}`}
                       className="font-medium underline underline-offset-2"
                     >
                       {row.tagNumber}
                     </Link>
-                    {row.pigName ? (
-                      <span className="text-zinc-500 dark:text-zinc-400"> · {row.pigName}</span>
+                    {row.animalName ? (
+                      <span className="text-zinc-500 dark:text-zinc-400"> · {row.animalName}</span>
                     ) : null}
                   </Td>
                   <Td>{row.penName ?? "—"}</Td>
@@ -217,10 +217,10 @@ export default async function HealthPage({ searchParams }: PageProps<"/health">)
             </Thead>
             <Tbody>
               {withdrawal.map((row) => (
-                <Tr key={row.pigId}>
+                <Tr key={row.animalId}>
                   <Td>
                     <Link
-                      href={`/animals/${row.pigId}`}
+                      href={`/animals/${row.animalId}`}
                       className="font-medium underline underline-offset-2"
                     >
                       {row.tagNumber}
@@ -302,13 +302,13 @@ export default async function HealthPage({ searchParams }: PageProps<"/health">)
             </Select>
           </Field>
 
-          <Field label="Animal" htmlFor="pigId">
-            <Select id="pigId" name="pigId" defaultValue={filters.pigId ?? ""}>
+          <Field label="Animal" htmlFor="animalId">
+            <Select id="animalId" name="animalId" defaultValue={filters.animalId ?? ""}>
               <option value="">All animals</option>
-              {pigs.map((pig) => (
-                <option key={pig.id} value={pig.id}>
-                  {pig.tagNumber}
-                  {pig.name ? ` — ${pig.name}` : ""}
+              {animals.map((animal) => (
+                <option key={animal.id} value={animal.id}>
+                  {animal.tagNumber}
+                  {animal.name ? ` — ${animal.name}` : ""}
                 </option>
               ))}
             </Select>
@@ -380,14 +380,18 @@ export default async function HealthPage({ searchParams }: PageProps<"/health">)
                 >
                   <Td className="whitespace-nowrap">{formatDate(record.recordedAt)}</Td>
                   <Td className="whitespace-nowrap">
-                    <Link
-                      href={`/animals/${record.pig.id}`}
-                      className="font-medium underline underline-offset-2"
-                    >
-                      {record.pig.tagNumber}
-                    </Link>
+                    {record.animal ? (
+                      <Link
+                        href={`/animals/${record.animal.id}`}
+                        className="font-medium underline underline-offset-2"
+                      >
+                        {record.animal.tagNumber}
+                      </Link>
+                    ) : (
+                      <span className="text-zinc-500 dark:text-zinc-400">Whole batch</span>
+                    )}
                   </Td>
-                  <Td>{record.pig.pen?.name ?? "—"}</Td>
+                  <Td>{record.animal?.pen?.name ?? "—"}</Td>
                   <Td>
                     <Link href={`/health/${record.id}`} className="underline underline-offset-2">
                       {record.diagnosis}

@@ -142,7 +142,7 @@ export default async function MonitoringPage() {
       <Card>
         <LineChart
           title="Disease timeline"
-          description="Distinct animals affected by each condition, per week. Counting animals rather than records keeps one pig's three follow-up visits from looking like an outbreak."
+          description="Distinct animals affected by each condition, per week. Counting animals rather than records keeps one animal's three follow-up visits from looking like an outbreak."
           series={timeline.series.map((serie) => ({
             name: serie.diagnosis,
             points: timeline.buckets.map((bucket, index) => ({
@@ -243,11 +243,11 @@ export default async function MonitoringPage() {
               </Thead>
               <Tbody>
                 {mortality.events.map((event) => (
-                  <Tr key={`${event.pigId}-${event.date.toISOString()}`}>
+                  <Tr key={`${event.animalId}-${event.date.toISOString()}`}>
                     <Td className="whitespace-nowrap">{formatDate(event.date)}</Td>
                     <Td>
                       <Link
-                        href={`/animals/${event.pigId}`}
+                        href={`/animals/${event.animalId}`}
                         className="font-medium underline underline-offset-2"
                       >
                         {event.tagNumber}

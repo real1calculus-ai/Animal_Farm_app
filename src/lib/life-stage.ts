@@ -31,19 +31,19 @@ export function deriveLifeStage({
 }): LifeStage {
   const days = ageInDays(dateOfBirth, asOf);
 
-  if (days < weaningAgeDays) return "PIGLET";
+  if (days < weaningAgeDays) return "YOUNG";
   if (days < WEANER_UNTIL_DAYS) return "WEANER";
   if (days < GROWER_UNTIL_DAYS) return "GROWER";
 
   if (sex === "FEMALE") {
-    if (parity > 0) return "SOW";
-    if (days >= minBreedingAgeDays) return "GILT";
+    if (parity > 0) return "BREEDING_FEMALE";
+    if (days >= minBreedingAgeDays) return "MAIDEN_FEMALE";
     return "FINISHER";
   }
 
   // A male at breeding age is only a boar if the farm is actually keeping him
   // for breeding; the caller decides that by whether he has breeding records.
-  return days >= minBreedingAgeDays ? "BOAR" : "FINISHER";
+  return days >= minBreedingAgeDays ? "BREEDING_MALE" : "FINISHER";
 }
 
 /** Average daily gain in kg/day between two weigh-ins. */

@@ -60,6 +60,6 @@ export function severityVariant(severity: AlertSeverity): "danger" | "warning" |
 }
 
 /** Describes an animal in one token the user recognises on the pen wall. */
-export function pigLabel(pig: { tagNumber: string; name: string | null }): string {
-  return pig.name ? `${pig.tagNumber} (${pig.name})` : pig.tagNumber;
+export function animalLabel(animal: { tagNumber: string; name: string | null }): string {
+  return animal.name ? `${animal.tagNumber} (${animal.name})` : animal.tagNumber;
 }

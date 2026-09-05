@@ -39,7 +39,7 @@ type FeedingInput = {
   fedAt: Date;
   feedTypeId: string;
   penId: string | null;
-  pigId: string | null;
+  animalId: string | null;
   animalCount: number;
   allocatedKg: number;
   consumedKg: number | null;
@@ -125,7 +125,7 @@ async function writeFeeding(input: FeedingInput): Promise<{
           farmId: input.farmId,
           fedAt: input.fedAt,
           penId: input.penId,
-          pigId: input.pigId,
+          animalId: input.animalId,
           animalCount: input.animalCount,
           feedTypeId: input.feedTypeId,
           feedBatchId: draw.batchId,
@@ -153,11 +153,11 @@ async function writeFeeding(input: FeedingInput): Promise<{
 /** Stage tally for whatever the feeding targets, for the §8.4 stage check. */
 async function targetStageCounts(
   farmId: string,
-  { penId, pigId }: { penId: string | null; pigId: string | null }
+  { penId, animalId }: { penId: string | null; animalId: string | null }
 ): Promise<Map<LifeStage, number>> {
   const herd = await getHerdWithStages(farmId);
-  const animals = pigId
-    ? herd.filter((a) => a.id === pigId)
+  const animals = animalId
+    ? herd.filter((a) => a.id === animalId)
     : penId
       ? herd.filter((a) => a.penId === penId)
       : [];
@@ -169,12 +169,12 @@ async function targetStageCounts(
   return counts;
 }
 
-function revalidateFeeding(penId?: string | null, pigId?: string | null) {
+function revalidateFeeding(penId?: string | null, animalId?: string | null) {
   revalidatePath("/feed");
   revalidatePath("/feed/records");
   revalidatePath("/feed/batches");
   revalidatePath("/feed/analysis");
-  if (pigId) revalidatePath(`/animals/${pigId}`);
+  if (animalId) revalidatePath(`/animals/${animalId}`);
   if (penId) revalidatePath(`/pens/${penId}`);
 }
 
@@ -198,31 +198,31 @@ export async function recordFeeding(formData: FormData) {
   if (!feedType) throw new Error("That feed type does not belong to this farm");
 
   let penId: string | null = null;
-  let pigId: string | null = null;
+  let animalId: string | null = null;
   let animalCount: number;
 
   if (target === "PEN") {
     penId = requireString(formData, "penId");
     const pen = await prisma.pen.findFirst({
       where: { id: penId, farmId },
-      select: { id: true, _count: { select: { pigs: { where: { status: "ACTIVE" } } } } },
+      select: { id: true, _count: { select: { animals: { where: { status: "ACTIVE" } } } } },
     });
     if (!pen) throw new Error("That pen does not belong to this farm");
 
     // The headcount is captured at feeding time (schema comment on
-    // `FeedingRecord.animalCount`) so cost-per-animal doesn't shift when pigs
+    // `FeedingRecord.animalCount`) so cost-per-animal doesn't shift when animals
     // are moved later. The form pre-fills it from live occupancy; a worker can
     // correct it, because a pen sheet and the database disagree often enough.
     animalCount = optionalFloat(formData, "animalCount") !== null
       ? requireInt(formData, "animalCount")
-      : pen._count.pigs;
+      : pen._count.animals;
   } else {
-    pigId = requireString(formData, "pigId");
-    const pig = await prisma.pig.findFirst({
-      where: { id: pigId, farmId },
+    animalId = requireString(formData, "animalId");
+    const animal = await prisma.animal.findFirst({
+      where: { id: animalId, farmId },
       select: { id: true, penId: true },
     });
-    if (!pig) throw new Error("That animal does not belong to this farm");
+    if (!animal) throw new Error("That animal does not belong to this farm");
     animalCount = 1;
   }
 
@@ -252,7 +252,7 @@ export async function recordFeeding(formData: FormData) {
     fedAt,
     feedTypeId,
     penId,
-    pigId,
+    animalId,
     animalCount,
     allocatedKg,
     consumedKg,
@@ -264,10 +264,10 @@ export async function recordFeeding(formData: FormData) {
   // src/lib/feed/stage-match.ts for why blocking this costs more than it saves.
   const warning = stageMismatchWarning(
     feedType.classification,
-    await targetStageCounts(farmId, { penId, pigId })
+    await targetStageCounts(farmId, { penId, animalId })
   );
 
-  revalidateFeeding(penId, pigId);
+  revalidateFeeding(penId, animalId);
   redirect(
     warning
       ? `/feed/records?saved=1&warn=${encodeURIComponent(warning)}`
@@ -344,7 +344,7 @@ export async function recordBulkFeeding(formData: FormData) {
         fedAt,
         feedTypeId,
         penId: pen.id,
-        pigId: null,
+        animalId: null,
         animalCount: count,
         allocatedKg: kg,
         // Bulk entry records what was put out. Consumption is observed
@@ -386,7 +386,7 @@ export async function deleteFeedingRecord(formData: FormData) {
 
   const existing = await prisma.feedingRecord.findFirst({
     where: { id, farmId },
-    select: { id: true, penId: true, pigId: true, feedBatchId: true, allocatedKg: true },
+    select: { id: true, penId: true, animalId: true, feedBatchId: true, allocatedKg: true },
   });
   if (!existing) throw new Error("Feeding record not found");
 
@@ -400,5 +400,5 @@ export async function deleteFeedingRecord(formData: FormData) {
     await tx.feedingRecord.delete({ where: { id: existing.id } });
   });
 
-  revalidateFeeding(existing.penId, existing.pigId);
+  revalidateFeeding(existing.penId, existing.animalId);
 }

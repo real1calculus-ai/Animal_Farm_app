@@ -3,8 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
-import type { AcquisitionType, ExitReason, PigStatus, Sex } from "@prisma/client";
+import type { AcquisitionType, ExitReason, AnimalStatus, Sex } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { getDefaultSpecies, getSpecies } from "@/lib/db/species";
 import { requireRole, WRITE_ROLES } from "@/lib/auth";
 import { getActiveFarmId } from "@/lib/active-farm";
 import {
@@ -38,7 +39,7 @@ import type { AnimalActionState } from "@/components/animals/form-state";
  */
 
 const SEXES = Object.keys(SEX_LABELS) as Sex[];
-const STATUSES = Object.keys(PIG_STATUS_LABELS) as PigStatus[];
+const STATUSES = Object.keys(PIG_STATUS_LABELS) as AnimalStatus[];
 const ACQUISITION_TYPES = Object.keys(ACQUISITION_TYPE_LABELS) as AcquisitionType[];
 const EXIT_REASONS = Object.keys(EXIT_REASON_LABELS) as ExitReason[];
 
@@ -65,6 +66,9 @@ function messageFrom(error: unknown): string {
 type AnimalFields = ReturnType<typeof readAnimalFields>;
 
 function readAnimalFields(formData: FormData) {
+  // Optional: a farm keeping only one species should not be made to choose it
+  // on every animal. Resolved to the farm's default when absent.
+  const speciesId = optionalString(formData, "speciesId");
   const dateOfBirth = requireDate(formData, "dateOfBirth");
   const dateAcquired = requireDate(formData, "dateAcquired");
   const dateExit = optionalDate(formData, "dateExit");
@@ -103,6 +107,7 @@ function readAnimalFields(formData: FormData) {
   }
 
   return {
+    speciesId,
     tagNumber: requireString(formData, "tagNumber"),
     name: optionalString(formData, "name"),
     breed: requireString(formData, "breed"),
@@ -134,7 +139,7 @@ async function assertPenBelongsToFarm(farmId: string, penId: string | null): Pro
   if (!pen) throw new Error("The selected pen does not belong to this farm.");
 }
 
-function toPigData(fields: AnimalFields) {
+function toAnimalData(fields: AnimalFields) {
   return {
     tagNumber: fields.tagNumber,
     name: fields.name,
@@ -187,11 +192,18 @@ export async function createAnimal(
     });
     if (parentageError) return { error: parentageError };
 
+    // The form may name a species; a farm that has only ever kept one gets it
+    // resolved for them rather than being made to pick from a list of one.
+    const speciesId = fields.speciesId ?? (await getDefaultSpecies(farmId)).id;
+    const species = await getSpecies(farmId, speciesId);
+    if (!species) return { error: "That species does not belong to this farm" };
+
     createdId = await prisma.$transaction(async (tx) => {
-      const pig = await tx.pig.create({
+      const animal = await tx.animal.create({
         data: {
           farmId,
-          ...toPigData(fields),
+          speciesId,
+          ...toAnimalData(fields),
           // An animal entered straight into a pen has occupied it since it
           // arrived; there is no PenMovement for that because no move happened.
           dateMovedIn: fields.penId ? fields.dateAcquired : null,
@@ -199,8 +211,8 @@ export async function createAnimal(
         select: { id: true },
       });
 
-      await recomputePedigreeMetrics(farmId, [pig.id], tx);
-      return pig.id;
+      await recomputePedigreeMetrics(farmId, [animal.id], tx);
+      return animal.id;
     });
   } catch (error) {
     return { error: messageFrom(error) };
@@ -220,7 +232,7 @@ export async function updateAnimal(
   const id = requireString(formData, "id");
 
   try {
-    const existing = await prisma.pig.findFirst({
+    const existing = await prisma.animal.findFirst({
       where: { id, farmId },
       select: { id: true, motherId: true, fatherId: true, dateOfBirth: true, penId: true },
     });
@@ -248,10 +260,10 @@ export async function updateAnimal(
       existing.dateOfBirth.getTime() !== fields.dateOfBirth.getTime();
 
     await prisma.$transaction(async (tx) => {
-      await tx.pig.update({
+      await tx.animal.update({
         where: { id },
         data: {
-          ...toPigData(fields),
+          ...toAnimalData(fields),
           // Re-assigning a pen from the edit form is a correction, not a move,
           // so it does not write a PenMovement — /animals/[id] has the move
           // form for that, and inventing history here would corrupt the
@@ -289,18 +301,18 @@ export async function logWeight(
   const user = await requireRole(WRITE_ROLES);
   const farmId = await getActiveFarmId(user);
 
-  const pigId = requireString(formData, "pigId");
+  const animalId = requireString(formData, "animalId");
 
   try {
-    const pig = await prisma.pig.findFirst({
-      where: { id: pigId, farmId },
+    const animal = await prisma.animal.findFirst({
+      where: { id: animalId, farmId },
       select: { id: true, dateOfBirth: true },
     });
-    if (!pig) return { error: "That animal is not on this farm." };
+    if (!animal) return { error: "That animal is not on this farm." };
 
     const recordedAt = requireDate(formData, "recordedAt");
     assertNotFuture(recordedAt, "Weigh-in date");
-    if (recordedAt.getTime() < pig.dateOfBirth.getTime()) {
+    if (recordedAt.getTime() < animal.dateOfBirth.getTime()) {
       return { error: "A weigh-in cannot be dated before the animal was born." };
     }
 
@@ -321,13 +333,13 @@ export async function logWeight(
     const notes = optionalString(formData, "notes");
 
     // One transaction: the WeightRecord row and the denormalised
-    // `Pig.currentWeightKg` are the same fact stored twice, and a partial
+    // `Animal.currentWeightKg` are the same fact stored twice, and a partial
     // write would leave the herd list quoting a weight that no weigh-in
     // supports.
     await prisma.$transaction(async (tx) => {
       await tx.weightRecord.create({
         data: {
-          pigId,
+          animalId,
           recordedAt,
           weightKg,
           bodyConditionScore,
@@ -339,14 +351,14 @@ export async function logWeight(
       // `currentWeightKg` means "the most recent weigh-in", so a back-dated
       // correction is stored but does not overwrite a newer reading.
       const latest = await tx.weightRecord.findFirst({
-        where: { pigId },
+        where: { animalId },
         orderBy: { recordedAt: "desc" },
         select: { recordedAt: true, weightKg: true, bodyConditionScore: true },
       });
 
       if (latest) {
-        await tx.pig.update({
-          where: { id: pigId },
+        await tx.animal.update({
+          where: { id: animalId },
           data: {
             currentWeightKg: latest.weightKg,
             ...(latest.bodyConditionScore !== null
@@ -361,7 +373,7 @@ export async function logWeight(
   }
 
   revalidatePath("/animals");
-  revalidatePath(`/animals/${pigId}`);
+  revalidatePath(`/animals/${animalId}`);
   return { error: null, success: "Weight recorded." };
 }
 
@@ -376,11 +388,11 @@ export async function movePen(
   const user = await requireRole(WRITE_ROLES);
   const farmId = await getActiveFarmId(user);
 
-  const pigId = requireString(formData, "pigId");
+  const animalId = requireString(formData, "animalId");
 
   try {
-    const pig = await prisma.pig.findFirst({
-      where: { id: pigId, farmId },
+    const animal = await prisma.animal.findFirst({
+      where: { id: animalId, farmId },
       select: {
         id: true,
         status: true,
@@ -389,28 +401,28 @@ export async function movePen(
         pen: { select: { name: true } },
       },
     });
-    if (!pig) return { error: "That animal is not on this farm." };
+    if (!animal) return { error: "That animal is not on this farm." };
 
     // §8.1: deceased animals cannot be moved between pens.
-    if (pig.status === "DECEASED") {
+    if (animal.status === "DECEASED") {
       return { error: "This animal is recorded as deceased and cannot be moved to a pen." };
     }
-    if (pig.status === "SOLD" || pig.status === "CULLED") {
+    if (animal.status === "SOLD" || animal.status === "CULLED") {
       return {
-        error: `This animal has left the herd (${pig.status === "SOLD" ? "sold" : "culled"}) and cannot be moved. Change its status first if that was recorded in error.`,
+        error: `This animal has left the herd (${animal.status === "SOLD" ? "sold" : "culled"}) and cannot be moved. Change its status first if that was recorded in error.`,
       };
     }
 
     const movedAt = requireDate(formData, "movedAt");
     assertNotFuture(movedAt, "Move date");
-    if (movedAt.getTime() < pig.dateOfBirth.getTime()) {
+    if (movedAt.getTime() < animal.dateOfBirth.getTime()) {
       return { error: "A pen move cannot be dated before the animal was born." };
     }
 
     const toPenId = optionalString(formData, "toPenId");
     const reason = optionalString(formData, "reason");
 
-    if (toPenId === pig.penId) {
+    if (toPenId === animal.penId) {
       return {
         error: toPenId
           ? "That is the pen this animal is already in."
@@ -427,16 +439,16 @@ export async function movePen(
           select: {
             name: true,
             capacity: true,
-            _count: { select: { pigs: { where: { status: "ACTIVE" } } } },
+            _count: { select: { animals: { where: { status: "ACTIVE" } } } },
           },
         });
         if (!pen) throw new Error("The selected pen does not belong to this farm.");
 
         // Counted inside the transaction so two people moving animals at once
         // cannot both read "one space left" and both take it.
-        if (pen._count.pigs >= pen.capacity) {
+        if (pen._count.animals >= pen.capacity) {
           throw new Error(
-            `${pen.name} is at capacity (${pen._count.pigs} of ${pen.capacity}). Move an animal out first, or raise the pen's capacity in Pens.`
+            `${pen.name} is at capacity (${pen._count.animals} of ${pen.capacity}). Move an animal out first, or raise the pen's capacity in Pens.`
           );
         }
 
@@ -445,11 +457,11 @@ export async function movePen(
 
       await tx.penMovement.create({
         data: {
-          pigId,
+          animalId,
           penId: toPenId,
           // Denormalised names, so the movement history still reads correctly
           // after a pen is renamed or removed.
-          fromPenName: pig.pen?.name ?? null,
+          fromPenName: animal.pen?.name ?? null,
           toPenName,
           movedAt,
           reason,
@@ -457,8 +469,8 @@ export async function movePen(
         },
       });
 
-      await tx.pig.update({
-        where: { id: pigId },
+      await tx.animal.update({
+        where: { id: animalId },
         data: { penId: toPenId, dateMovedIn: toPenId ? movedAt : null },
       });
     });
@@ -467,7 +479,7 @@ export async function movePen(
   }
 
   revalidatePath("/animals");
-  revalidatePath(`/animals/${pigId}`);
+  revalidatePath(`/animals/${animalId}`);
   revalidatePath("/pens");
   return { error: null, success: "Pen move recorded." };
 }

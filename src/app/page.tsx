@@ -21,7 +21,7 @@ import { LIFE_STAGE_LABELS } from "@/lib/labels";
 import { addDays, formatCents, formatDate, formatKg, formatPercent } from "@/lib/format";
 import type { LifeStage } from "@prisma/client";
 
-const STAGE_ORDER: LifeStage[] = ["PIGLET", "WEANER", "GROWER", "FINISHER", "GILT", "SOW", "BOAR"];
+const STAGE_ORDER: LifeStage[] = ["YOUNG", "WEANER", "GROWER", "FINISHER", "MAIDEN_FEMALE", "BREEDING_FEMALE", "BREEDING_MALE"];
 
 export default async function DashboardPage() {
   const user = await requireUser();
@@ -36,7 +36,7 @@ export default async function DashboardPage() {
   const [alerts, herd, parity, pens, feed, upcoming, recentHealth, finance, index] =
     await Promise.all([
       getAlerts(farmId, user.role, now),
-      prisma.pig.findMany({
+      prisma.animal.findMany({
         where: { farmId, status: "ACTIVE" },
         select: { id: true, sex: true, dateOfBirth: true },
       }),
@@ -64,7 +64,7 @@ export default async function DashboardPage() {
           recordedAt: true,
           diagnosis: true,
           outcome: true,
-          pig: { select: { id: true, tagNumber: true } },
+          animal: { select: { id: true, tagNumber: true } },
         },
         orderBy: { recordedAt: "desc" },
         take: 6,
@@ -79,14 +79,14 @@ export default async function DashboardPage() {
   // same helper every other screen uses — a stored copy would go stale the day
   // nobody moves a gilt to "sow" after her first litter.
   const byStage = new Map<LifeStage, number>();
-  for (const pig of herd) {
+  for (const animal of herd) {
     const stage = deriveLifeStage({
-      dateOfBirth: pig.dateOfBirth,
-      sex: pig.sex,
-      parity: parity.get(pig.id) ?? 0,
+      dateOfBirth: animal.dateOfBirth,
+      sex: animal.sex,
+      parity: parity.get(animal.id) ?? 0,
       weaningAgeDays: settings.weaningAgeDays,
       minBreedingAgeDays:
-        pig.sex === "FEMALE" ? settings.minBreedingAgeDaysFemale : settings.minBreedingAgeDaysMale,
+        animal.sex === "FEMALE" ? settings.minBreedingAgeDaysFemale : settings.minBreedingAgeDaysMale,
       asOf: now,
     });
     byStage.set(stage, (byStage.get(stage) ?? 0) + 1);
@@ -95,7 +95,7 @@ export default async function DashboardPage() {
   const calculator = createInbreedingCalculator(index);
   const herdF =
     herd.length > 0
-      ? herd.reduce((sum, pig) => sum + calculator.inbreedingOf(pig.id), 0) / herd.length
+      ? herd.reduce((sum, animal) => sum + calculator.inbreedingOf(animal.id), 0) / herd.length
       : 0;
 
   const lowFeed = feed.filter((row) => row.belowReorderLevel || row.outOfStock);
@@ -255,7 +255,7 @@ export default async function DashboardPage() {
                     <Tr key={record.id}>
                       <Td>
                         <Link href={`/health/${record.id}`} className="underline underline-offset-2">
-                          {record.pig.tagNumber}
+                          {record.animal?.tagNumber ?? "Batch"}
                         </Link>
                       </Td>
                       <Td>{record.diagnosis}</Td>

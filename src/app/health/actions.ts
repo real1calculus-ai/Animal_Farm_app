@@ -182,28 +182,28 @@ export async function createHealthRecord(formData: FormData): Promise<void> {
   const user = await requireRole(OBSERVE_ROLES);
   const farmId = await getActiveFarmId(user);
 
-  const pigId = requireString(formData, "pigId");
+  const animalId = requireString(formData, "animalId");
   const recordedAt = requireDate(formData, "recordedAt");
   const outcome = requireEnum(formData, "outcome", OUTCOMES);
 
-  const pig = await prisma.pig.findFirst({
-    where: { id: pigId, farmId },
+  const animal = await prisma.animal.findFirst({
+    where: { id: animalId, farmId },
     select: { id: true, dateOfBirth: true, status: true, tagNumber: true },
   });
-  if (!pig) throw new Error("Animal not found on this farm");
+  if (!animal) throw new Error("Animal not found on this farm");
 
-  assertRecordDate(recordedAt, pig.dateOfBirth);
+  assertRecordDate(recordedAt, animal.dateOfBirth);
 
   const medications = parseMedications(formData);
   for (const medication of medications) {
-    if (medication.startDate < startOfDay(pig.dateOfBirth)) {
+    if (medication.startDate < startOfDay(animal.dateOfBirth)) {
       throw new Error(`Medication "${medication.drugName}" starts before the animal was born`);
     }
   }
 
   const data: Prisma.HealthRecordUncheckedCreateInput = {
     farmId,
-    pigId: pig.id,
+    animalId: animal.id,
     recordedAt,
     recordType: requireEnum(formData, "recordType", RECORD_TYPES),
     category: requireEnum(formData, "category", CATEGORIES),
@@ -237,8 +237,8 @@ export async function createHealthRecord(formData: FormData): Promise<void> {
     // in the same transaction as the record that reports the death — never as
     // a second write that can fail on its own.
     if (markDeceased && exitReason) {
-      await tx.pig.update({
-        where: { id: pig.id },
+      await tx.animal.update({
+        where: { id: animal.id },
         data: {
           status: "DECEASED",
           dateExit: recordedAt,
@@ -254,7 +254,7 @@ export async function createHealthRecord(formData: FormData): Promise<void> {
 
   revalidatePath("/health");
   revalidatePath("/health/monitoring");
-  revalidatePath(`/animals/${pig.id}`);
+  revalidatePath(`/animals/${animal.id}`);
   if (markDeceased) revalidatePath("/animals");
 
   redirect(`/health/${recordId}`);
@@ -267,12 +267,14 @@ export async function updateHealthRecord(formData: FormData): Promise<void> {
   const id = requireString(formData, "id");
   const existing = await prisma.healthRecord.findFirst({
     where: { id, farmId },
-    select: { id: true, pigId: true, pig: { select: { dateOfBirth: true } } },
+    select: { id: true, animalId: true, animal: { select: { dateOfBirth: true } } },
   });
   if (!existing) throw new Error("Health record not found on this farm");
 
   const recordedAt = requireDate(formData, "recordedAt");
-  assertRecordDate(recordedAt, existing.pig.dateOfBirth);
+  // Batch records have no single birth date to validate against; the check
+  // only applies to a named animal.
+  if (existing.animal) assertRecordDate(recordedAt, existing.animal.dateOfBirth);
 
   const outcome = requireEnum(formData, "outcome", OUTCOMES);
   const resolvedAt = optionalDate(formData, "resolvedAt");
@@ -296,7 +298,7 @@ export async function updateHealthRecord(formData: FormData): Promise<void> {
   revalidatePath("/health");
   revalidatePath(`/health/${existing.id}`);
   revalidatePath("/health/monitoring");
-  revalidatePath(`/animals/${existing.pigId}`);
+  revalidatePath(`/animals/${existing.animalId}`);
 }
 
 export async function deleteHealthRecord(formData: FormData): Promise<void> {
@@ -306,7 +308,7 @@ export async function deleteHealthRecord(formData: FormData): Promise<void> {
   const id = requireString(formData, "id");
   const existing = await prisma.healthRecord.findFirst({
     where: { id, farmId },
-    select: { id: true, pigId: true },
+    select: { id: true, animalId: true },
   });
   if (!existing) throw new Error("Health record not found on this farm");
 
@@ -315,7 +317,7 @@ export async function deleteHealthRecord(formData: FormData): Promise<void> {
 
   revalidatePath("/health");
   revalidatePath("/health/monitoring");
-  revalidatePath(`/animals/${existing.pigId}`);
+  revalidatePath(`/animals/${existing.animalId}`);
   redirect("/health");
 }
 
@@ -327,7 +329,7 @@ export async function resolveHealthRecord(formData: FormData): Promise<void> {
   const id = requireString(formData, "id");
   const existing = await prisma.healthRecord.findFirst({
     where: { id, farmId },
-    select: { id: true, pigId: true },
+    select: { id: true, animalId: true },
   });
   if (!existing) throw new Error("Health record not found on this farm");
 
@@ -348,7 +350,7 @@ export async function resolveHealthRecord(formData: FormData): Promise<void> {
 async function requireRecordOnFarm(id: string, farmId: string) {
   const record = await prisma.healthRecord.findFirst({
     where: { id, farmId },
-    select: { id: true, pigId: true, pig: { select: { dateOfBirth: true } } },
+    select: { id: true, animalId: true, animal: { select: { dateOfBirth: true } } },
   });
   if (!record) throw new Error("Health record not found on this farm");
   return record;
@@ -362,7 +364,7 @@ export async function addMedication(formData: FormData): Promise<void> {
   const record = await requireRecordOnFarm(healthRecordId, farmId);
 
   const startDate = requireDate(formData, "startDate");
-  if (startDate < startOfDay(record.pig.dateOfBirth)) {
+  if (record.animal && startDate < startOfDay(record.animal.dateOfBirth)) {
     throw new Error("Medication cannot start before the animal was born");
   }
   const completedDate = optionalDate(formData, "completedDate");
@@ -391,7 +393,7 @@ export async function addMedication(formData: FormData): Promise<void> {
 
   revalidatePath("/health");
   revalidatePath(`/health/${record.id}`);
-  revalidatePath(`/animals/${record.pigId}`);
+  revalidatePath(`/animals/${record.animalId}`);
 }
 
 export async function updateMedication(formData: FormData): Promise<void> {
@@ -401,7 +403,7 @@ export async function updateMedication(formData: FormData): Promise<void> {
   const id = requireString(formData, "id");
   const medication = await prisma.medication.findFirst({
     where: { id, healthRecord: { farmId } },
-    select: { id: true, healthRecordId: true, healthRecord: { select: { pigId: true } } },
+    select: { id: true, healthRecordId: true, healthRecord: { select: { animalId: true } } },
   });
   if (!medication) throw new Error("Medication not found on this farm");
 
@@ -432,7 +434,7 @@ export async function updateMedication(formData: FormData): Promise<void> {
 
   revalidatePath("/health");
   revalidatePath(`/health/${medication.healthRecordId}`);
-  revalidatePath(`/animals/${medication.healthRecord.pigId}`);
+  revalidatePath(`/animals/${medication.healthRecord.animalId}`);
 }
 
 /**

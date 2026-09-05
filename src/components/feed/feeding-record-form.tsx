@@ -34,7 +34,7 @@ export type PenOption = {
   suggestion: { feedTypeId: string; kg: number } | null;
 };
 
-export type PigOption = {
+export type AnimalOption = {
   id: string;
   tagNumber: string;
   name: string | null;
@@ -54,18 +54,18 @@ export function FeedingRecordForm({
   action,
   feedTypes,
   pens,
-  pigs,
+  animals,
 }: {
   action: (formData: FormData) => Promise<void>;
   feedTypes: FeedTypeOption[];
   pens: PenOption[];
-  pigs: PigOption[];
+  animals: AnimalOption[];
 }) {
   const today = toDateInputValue(new Date());
 
   const [target, setTarget] = useState<"PEN" | "PIG">("PEN");
   const [penId, setPenId] = useState(pens[0]?.id ?? "");
-  const [pigId, setPigId] = useState(pigs[0]?.id ?? "");
+  const [animalId, setAnimalId] = useState(animals[0]?.id ?? "");
   const [feedTypeId, setFeedTypeId] = useState(
     pens[0]?.suggestion?.feedTypeId ?? feedTypes[0]?.id ?? ""
   );
@@ -77,7 +77,7 @@ export function FeedingRecordForm({
   const [feedBatchId, setFeedBatchId] = useState("");
 
   const pen = pens.find((p) => p.id === penId) ?? null;
-  const pig = pigs.find((p) => p.id === pigId) ?? null;
+  const animal = animals.find((p) => p.id === animalId) ?? null;
   const feedType = feedTypes.find((f) => f.id === feedTypeId) ?? null;
 
   const allocated = Number.parseFloat(allocatedKg);
@@ -99,8 +99,8 @@ export function FeedingRecordForm({
         ? pen
           ? stageMismatchWarning(feedType.classification, pen.stageCounts)
           : null
-        : pig
-          ? stageMismatchWarning(feedType.classification, { [pig.stage]: 1 })
+        : animal
+          ? stageMismatchWarning(feedType.classification, { [animal.stage]: 1 })
           : null;
 
   function onPenChange(id: string) {
@@ -159,18 +159,18 @@ export function FeedingRecordForm({
             </Select>
           </Field>
         ) : (
-          <Field label="Animal" htmlFor="pigId" required>
+          <Field label="Animal" htmlFor="animalId" required>
             <Select
-              id="pigId"
-              name="pigId"
+              id="animalId"
+              name="animalId"
               required
-              value={pigId}
-              onChange={(event) => setPigId(event.target.value)}
+              value={animalId}
+              onChange={(event) => setAnimalId(event.target.value)}
             >
               <option value="" disabled>
                 Select an animal…
               </option>
-              {pigs.map((option) => (
+              {animals.map((option) => (
                 <option key={option.id} value={option.id}>
                   {option.tagNumber}
                   {option.name ? ` — ${option.name}` : ""}
@@ -263,7 +263,7 @@ export function FeedingRecordForm({
           <Field
             label="Animals fed"
             htmlFor="animalCount"
-            hint="Recorded as at today, so cost per animal stays put when pigs move"
+            hint="Recorded as at today, so cost per animal stays put when animals move"
           >
             <Input
               id="animalCount"

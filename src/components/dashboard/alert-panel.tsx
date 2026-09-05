@@ -7,7 +7,7 @@ import { FAMILY_LABELS, severityVariant, type Alert } from "@/lib/alerts/types";
 
 /**
  * The first thing on the screen, because the question a farmer opens this app
- * to answer is "what needs me today?" — not "how many pigs do I have".
+ * to answer is "what needs me today?" — not "how many animals do I have".
  */
 export function AlertPanel({ alerts }: { alerts: Alert[] }) {
   if (alerts.length === 0) {

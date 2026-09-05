@@ -3,7 +3,7 @@ import { addDays, formatPercent } from "@/lib/format";
 import { loadPedigreeIndex, ancestorsOf } from "@/lib/breeding/pedigree";
 import { createInbreedingCalculator } from "@/lib/breeding/inbreeding";
 import type { FarmSettings } from "@prisma/client";
-import { pigLabel, type Alert } from "@/lib/alerts/types";
+import { animalLabel, type Alert } from "@/lib/alerts/types";
 
 /** A sire taking more than this share of recent matings is a bottleneck risk. */
 const SIRE_DOMINANCE_FRACTION = 0.4;
@@ -30,7 +30,7 @@ export async function geneticsAlerts(
 
   const calculator = createInbreedingCalculator(index);
 
-  const active = await prisma.pig.findMany({
+  const active = await prisma.animal.findMany({
     where: { farmId, status: "ACTIVE" },
     select: { id: true, tagNumber: true, name: true },
   });
@@ -38,17 +38,17 @@ export async function geneticsAlerts(
   if (active.length === 0) return alerts;
 
   let total = 0;
-  for (const pig of active) {
-    const f = calculator.inbreedingOf(pig.id);
+  for (const animal of active) {
+    const f = calculator.inbreedingOf(animal.id);
     total += f;
 
     if (f > settings.maxInbreedingCoefficient) {
       alerts.push({
-        key: `inbred-animal:${pig.id}`,
+        key: `inbred-animal:${animal.id}`,
         severity: "WARNING",
         title: "Animal above inbreeding limit",
-        detail: `${pigLabel(pig)} has an inbreeding coefficient of ${formatPercent(f)}, above the farm limit of ${formatPercent(settings.maxInbreedingCoefficient)}.`,
-        href: `/animals/${pig.id}/pedigree`,
+        detail: `${animalLabel(animal)} has an inbreeding coefficient of ${formatPercent(f)}, above the farm limit of ${formatPercent(settings.maxInbreedingCoefficient)}.`,
+        href: `/animals/${animal.id}/pedigree`,
         family: "GENETICS",
       });
     }
@@ -87,7 +87,7 @@ export async function geneticsAlerts(
         key: `sire-overused:${row.sireId}`,
         severity: "WARNING",
         title: "One boar dominating matings",
-        detail: `${sire ? pigLabel(sire) : "A boar"} sired ${row._count._all} of the last ${matings} matings (${Math.round(share * 100)}%). Spreading service across more boars keeps the next generation's options open.`,
+        detail: `${sire ? animalLabel(sire) : "A boar"} sired ${row._count._all} of the last ${matings} matings (${Math.round(share * 100)}%). Spreading service across more boars keeps the next generation's options open.`,
         href: "/reports/genetics",
         family: "GENETICS",
       });
@@ -98,8 +98,8 @@ export async function geneticsAlerts(
   // ancestor. This catches narrowing that F alone misses, because F stays low
   // while everything quietly descends from the same few animals.
   const contributions = new Map<string, number>();
-  for (const pig of active) {
-    for (const ancestorId of ancestorsOf(index, pig.id).keys()) {
+  for (const animal of active) {
+    for (const ancestorId of ancestorsOf(index, animal.id).keys()) {
       contributions.set(ancestorId, (contributions.get(ancestorId) ?? 0) + 1);
     }
   }
@@ -115,7 +115,7 @@ export async function geneticsAlerts(
       key: `founder-dominant:${ancestorId}`,
       severity: "INFO",
       title: "Founder over-represented",
-      detail: `${pigLabel(ancestor)} appears in the ancestry of ${Math.round(share * 100)}% of the active herd.`,
+      detail: `${animalLabel(ancestor)} appears in the ancestry of ${Math.round(share * 100)}% of the active herd.`,
       href: "/reports/genetics",
       family: "GENETICS",
     });

@@ -36,12 +36,12 @@ export type SellableAnimal = {
   blockedReason: string | null;
 };
 
-type Row = { rowId: string; pigId: string; weightKg: string; pricePerKg: string };
+type Row = { rowId: string; animalId: string; weightKg: string; pricePerKg: string };
 
 let nextRowId = 0;
 function makeRow(): Row {
   nextRowId += 1;
-  return { rowId: `r${nextRowId}`, pigId: "", weightKg: "", pricePerKg: "" };
+  return { rowId: `r${nextRowId}`, animalId: "", weightKg: "", pricePerKg: "" };
 }
 
 /** Line amount in minor units. Mirrors the server: round once, at the end. */
@@ -59,9 +59,9 @@ export function SaleBuilder({ animals }: { animals: SellableAnimal[] }) {
   const sellable = useMemo(() => animals.filter((a) => a.blockedReason === null), [animals]);
   const blocked = useMemo(() => animals.filter((a) => a.blockedReason !== null), [animals]);
 
-  const chosen = new Set(rows.map((row) => row.pigId).filter(Boolean));
+  const chosen = new Set(rows.map((row) => row.animalId).filter(Boolean));
   const totalCents = rows.reduce((sum, row) => sum + lineAmountCents(row), 0);
-  const usableRows = rows.filter((row) => row.pigId && lineAmountCents(row) > 0);
+  const usableRows = rows.filter((row) => row.animalId && lineAmountCents(row) > 0);
 
   function update(rowId: string, patch: Partial<Row>) {
     setRows((current) =>
@@ -83,7 +83,7 @@ export function SaleBuilder({ animals }: { animals: SellableAnimal[] }) {
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-4">
         {rows.map((row, index) => {
-          const animal = sellable.find((a) => a.id === row.pigId) ?? null;
+          const animal = sellable.find((a) => a.id === row.animalId) ?? null;
           const amount = lineAmountCents(row);
 
           return (
@@ -107,19 +107,19 @@ export function SaleBuilder({ animals }: { animals: SellableAnimal[] }) {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-3">
-                <Field label="Animal" htmlFor={`pig-${row.rowId}`} required className="sm:col-span-3">
+                <Field label="Animal" htmlFor={`animal-${row.rowId}`} required className="sm:col-span-3">
                   <Select
-                    id={`pig-${row.rowId}`}
-                    name={`item-${row.rowId}-pigId`}
-                    value={row.pigId}
+                    id={`animal-${row.rowId}`}
+                    name={`item-${row.rowId}-animalId`}
+                    value={row.animalId}
                     required
                     onChange={(event) => {
-                      const pigId = event.target.value;
-                      const picked = sellable.find((a) => a.id === pigId);
+                      const animalId = event.target.value;
+                      const picked = sellable.find((a) => a.id === animalId);
                       // Pre-fill the last recorded weight; it is almost always
                       // the right starting point and saves typing in a barn.
                       update(row.rowId, {
-                        pigId,
+                        animalId,
                         weightKg:
                           row.weightKg ||
                           (picked?.currentWeightKg ? String(picked.currentWeightKg) : ""),
@@ -131,7 +131,7 @@ export function SaleBuilder({ animals }: { animals: SellableAnimal[] }) {
                       <option
                         key={option.id}
                         value={option.id}
-                        disabled={chosen.has(option.id) && option.id !== row.pigId}
+                        disabled={chosen.has(option.id) && option.id !== row.animalId}
                       >
                         {option.tagNumber}
                         {option.name ? ` — ${option.name}` : ""} ({option.breed}

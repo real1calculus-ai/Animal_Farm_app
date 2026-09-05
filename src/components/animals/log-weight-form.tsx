@@ -12,15 +12,15 @@ import {
 
 /**
  * Records a weigh-in. The action writes the `WeightRecord` and the
- * denormalised `Pig.currentWeightKg` in one transaction — this form is the
+ * denormalised `Animal.currentWeightKg` in one transaction — this form is the
  * only way the two are meant to change, so they cannot drift apart.
  */
 export function LogWeightForm({
-  pigId,
+  animalId,
   action,
   defaultDate,
 }: {
-  pigId: string;
+  animalId: string;
   action: (state: AnimalActionState, formData: FormData) => Promise<AnimalActionState>;
   /** yyyy-mm-dd — today, computed on the server so the barn phone's clock doesn't decide. */
   defaultDate: string;
@@ -30,7 +30,7 @@ export function LogWeightForm({
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      <input type="hidden" name="pigId" value={pigId} />
+      <input type="hidden" name="animalId" value={animalId} />
       <ActionBanner state={state} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

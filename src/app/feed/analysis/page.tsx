@@ -74,18 +74,18 @@ export default async function FeedAnalysisPage({ searchParams }: PageProps<"/fee
   ]);
 
   // --- Gain per animal over the window ------------------------------------
-  const weighInsByPig = new Map<string, { recordedAt: Date; weightKg: number }[]>();
+  const weighInsByAnimal = new Map<string, { recordedAt: Date; weightKg: number }[]>();
   for (const weight of weights) {
-    const rows = weighInsByPig.get(weight.pigId) ?? [];
+    const rows = weighInsByAnimal.get(weight.animalId) ?? [];
     rows.push({ recordedAt: weight.recordedAt, weightKg: weight.weightKg });
-    weighInsByPig.set(weight.pigId, rows);
+    weighInsByAnimal.set(weight.animalId, rows);
   }
 
-  const gainByPig = new Map<string, { gainKg: number; days: number; adg: number | null }>();
-  for (const [pigId, rows] of weighInsByPig) {
+  const gainByAnimal = new Map<string, { gainKg: number; days: number; adg: number | null }>();
+  for (const [animalId, rows] of weighInsByAnimal) {
     const window = growthWindow(rows);
     if (!window) continue;
-    gainByPig.set(pigId, {
+    gainByAnimal.set(animalId, {
       gainKg: window.gainKg,
       days: window.days,
       adg: window.adgKgPerDay,
@@ -95,7 +95,7 @@ export default async function FeedAnalysisPage({ searchParams }: PageProps<"/fee
   // --- Feed per animal, per pen -------------------------------------------
   const penMembers = new Map(pens.map((pen) => [pen.penId, pen.animals.map((a) => a.id)]));
 
-  const feedByPig = new Map<string, { kg: number; costCents: number }>();
+  const feedByAnimal = new Map<string, { kg: number; costCents: number }>();
   const feedByPen = new Map<string, { kg: number; costCents: number }>();
 
   function addTo(
@@ -116,13 +116,13 @@ export default async function FeedAnalysisPage({ searchParams }: PageProps<"/fee
 
     if (record.penId) addTo(feedByPen, record.penId, kg, costCents);
 
-    if (record.pigId) {
-      addTo(feedByPig, record.pigId, kg, costCents);
+    if (record.animalId) {
+      addTo(feedByAnimal, record.animalId, kg, costCents);
     } else if (record.penId) {
       const members = penMembers.get(record.penId) ?? [];
       if (members.length === 0) continue;
       for (const memberId of members) {
-        addTo(feedByPig, memberId, kg / members.length, Math.round(costCents / members.length));
+        addTo(feedByAnimal, memberId, kg / members.length, Math.round(costCents / members.length));
       }
     }
   }
@@ -131,9 +131,9 @@ export default async function FeedAnalysisPage({ searchParams }: PageProps<"/fee
   const penRows = pens
     .map((pen) => {
       const feed = feedByPen.get(pen.penId) ?? { kg: 0, costCents: 0 };
-      const contributors = pen.animals.filter((animal) => gainByPig.has(animal.id));
+      const contributors = pen.animals.filter((animal) => gainByAnimal.has(animal.id));
       const gainKg = roundKg(
-        contributors.reduce((sum, animal) => sum + (gainByPig.get(animal.id)?.gainKg ?? 0), 0)
+        contributors.reduce((sum, animal) => sum + (gainByAnimal.get(animal.id)?.gainKg ?? 0), 0)
       );
       const fcr = feedConversionRatio(feed.kg, gainKg);
       return {
@@ -170,13 +170,13 @@ export default async function FeedAnalysisPage({ searchParams }: PageProps<"/fee
     };
     row.animals += 1;
 
-    const feed = feedByPig.get(animal.id);
+    const feed = feedByAnimal.get(animal.id);
     if (feed) {
       row.feedKg += feed.kg;
       row.costCents += feed.costCents;
     }
 
-    const gain = gainByPig.get(animal.id);
+    const gain = gainByAnimal.get(animal.id);
     if (gain) {
       row.gainKg += gain.gainKg;
       if (gain.adg !== null) {
@@ -202,8 +202,8 @@ export default async function FeedAnalysisPage({ searchParams }: PageProps<"/fee
   // --- Individual animals: FCR, expected vs actual -------------------------
   const animalRows = herd
     .map((animal) => {
-      const feed = feedByPig.get(animal.id);
-      const gain = gainByPig.get(animal.id);
+      const feed = feedByAnimal.get(animal.id);
+      const gain = gainByAnimal.get(animal.id);
       const expected = expectedWeightKg(animal.ageDays);
       const variance =
         animal.currentWeightKg === null ? null : weightVariance(animal.currentWeightKg, animal.ageDays);
@@ -267,7 +267,7 @@ export default async function FeedAnalysisPage({ searchParams }: PageProps<"/fee
     0
   );
   const totalGainKg = roundKg(
-    [...gainByPig.values()].reduce((sum, gain) => sum + Math.max(0, gain.gainKg), 0)
+    [...gainByAnimal.values()].reduce((sum, gain) => sum + Math.max(0, gain.gainKg), 0)
   );
   const herdFcr = feedConversionRatio(totalFeedKg, totalGainKg);
 

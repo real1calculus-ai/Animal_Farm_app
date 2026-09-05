@@ -97,7 +97,7 @@ export default async function FeedingRecordsPage({ searchParams }: PageProps<"/f
     };
   });
 
-  const pigOptions = pens
+  const animalOptions = pens
     .flatMap((pen) => pen.animals)
     .map((animal) => ({
       id: animal.id,
@@ -132,13 +132,13 @@ export default async function FeedingRecordsPage({ searchParams }: PageProps<"/f
             >
               {record.pen.name}
             </Link>
-          ) : record.pig ? (
+          ) : record.animal ? (
             <Link
-              href={`/animals/${record.pig.id}`}
+              href={`/animals/${record.animal.id}`}
               className="underline decoration-zinc-300 underline-offset-2 dark:decoration-zinc-700"
             >
-              {record.pig.tagNumber}
-              {record.pig.name ? ` — ${record.pig.name}` : ""}
+              {record.animal.tagNumber}
+              {record.animal.name ? ` — ${record.animal.name}` : ""}
             </Link>
           ) : (
             "—"
@@ -322,7 +322,7 @@ export default async function FeedingRecordsPage({ searchParams }: PageProps<"/f
                   ? { feedTypeId: row.feedTypeId, kg: row.rationKg }
                   : null,
             }))}
-            pigs={pigOptions}
+            animals={animalOptions}
           />
         )}
       </Card>

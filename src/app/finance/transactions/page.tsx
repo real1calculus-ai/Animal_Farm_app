@@ -152,12 +152,12 @@ export default async function TransactionsPage({
                     </Td>
                     <Td>
                       {row.description ?? "—"}
-                      {row.pig ? (
+                      {row.animal ? (
                         <Link
-                          href={`/animals/${row.pig.id}`}
+                          href={`/animals/${row.animal.id}`}
                           className="ml-2 text-xs underline underline-offset-2"
                         >
-                          {row.pig.tagNumber}
+                          {row.animal.tagNumber}
                         </Link>
                       ) : null}
                     </Td>

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { Prisma } from "@prisma/client";
-import type { LifeStage, PigStatus, Sex } from "@prisma/client";
+import type { LifeStage, AnimalStatus, Sex } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getFarmSettings } from "@/lib/active-farm";
 import { deriveLifeStage } from "@/lib/life-stage";
@@ -32,7 +32,7 @@ export type PrismaLike = Prisma.TransactionClient;
 
 export type AnimalFilters = {
   /** "ALL" means every status; omitted defaults to ACTIVE at the page level. */
-  status?: PigStatus | "ALL";
+  status?: AnimalStatus | "ALL";
   sex?: Sex;
   breed?: string;
   /** A pen id, or "NONE" for animals with no pen assigned. */
@@ -54,9 +54,9 @@ const listSelect = {
   generation: true,
   inbreedingCoefficient: true,
   pen: { select: { id: true, name: true, housingType: true } },
-} satisfies Prisma.PigSelect;
+} satisfies Prisma.AnimalSelect;
 
-export type AnimalListRow = Prisma.PigGetPayload<{ select: typeof listSelect }> & {
+export type AnimalListRow = Prisma.AnimalGetPayload<{ select: typeof listSelect }> & {
   lifeStage: LifeStage;
   /** Litters farrowed. Always 0 for males. */
   parity: number;
@@ -77,7 +77,7 @@ export async function listAnimals(
   farmId: string,
   filters: AnimalFilters = {}
 ): Promise<AnimalListRow[]> {
-  const where: Prisma.PigWhereInput = { farmId };
+  const where: Prisma.AnimalWhereInput = { farmId };
 
   if (filters.status && filters.status !== "ALL") where.status = filters.status;
   if (filters.sex) where.sex = filters.sex;
@@ -93,24 +93,24 @@ export async function listAnimals(
     ];
   }
 
-  const [pigs, parity, settings] = await Promise.all([
-    prisma.pig.findMany({ where, select: listSelect, orderBy: { tagNumber: "asc" } }),
+  const [animals, parity, settings] = await Promise.all([
+    prisma.animal.findMany({ where, select: listSelect, orderBy: { tagNumber: "asc" } }),
     getParityMap(farmId),
     getFarmSettings(farmId),
   ]);
 
-  const rows: AnimalListRow[] = pigs.map((pig) => {
-    const pigParity = pig.sex === "FEMALE" ? (parity.get(pig.id) ?? 0) : 0;
+  const rows: AnimalListRow[] = animals.map((animal) => {
+    const animalParity = animal.sex === "FEMALE" ? (parity.get(animal.id) ?? 0) : 0;
     return {
-      ...pig,
-      parity: pigParity,
+      ...animal,
+      parity: animalParity,
       lifeStage: deriveLifeStage({
-        dateOfBirth: pig.dateOfBirth,
-        sex: pig.sex,
-        parity: pigParity,
+        dateOfBirth: animal.dateOfBirth,
+        sex: animal.sex,
+        parity: animalParity,
         weaningAgeDays: settings.weaningAgeDays,
         minBreedingAgeDays:
-          pig.sex === "FEMALE"
+          animal.sex === "FEMALE"
             ? settings.minBreedingAgeDaysFemale
             : settings.minBreedingAgeDaysMale,
       }),
@@ -139,16 +139,16 @@ export async function getParityMap(farmId: string): Promise<Map<string, number>>
   return counts;
 }
 
-export async function getParityOf(farmId: string, pigId: string): Promise<number> {
+export async function getParityOf(farmId: string, animalId: string): Promise<number> {
   return prisma.litter.count({
-    where: { breedingRecord: { farmId, damId: pigId } },
+    where: { breedingRecord: { farmId, damId: animalId } },
   });
 }
 
 /** Distinct breeds and the pens that can be filtered/moved to. */
 export async function getAnimalFilterOptions(farmId: string) {
   const [breeds, pens] = await Promise.all([
-    prisma.pig.findMany({
+    prisma.animal.findMany({
       where: { farmId },
       distinct: ["breed"],
       select: { breed: true },
@@ -170,7 +170,7 @@ export type PenOption = {
 
 /**
  * Pens with their live headcount, so a move can be refused before it overfills
- * one. Occupancy counts ACTIVE animals only — a pen is not full of pigs that
+ * one. Occupancy counts ACTIVE animals only — a pen is not full of animals that
  * have been sold out of it.
  */
 export async function listPensWithOccupancy(farmId: string): Promise<PenOption[]> {
@@ -181,7 +181,7 @@ export async function listPensWithOccupancy(farmId: string): Promise<PenOption[]
       name: true,
       housingType: true,
       capacity: true,
-      _count: { select: { pigs: { where: { status: "ACTIVE" } } } },
+      _count: { select: { animals: { where: { status: "ACTIVE" } } } },
     },
     orderBy: { name: "asc" },
   });
@@ -191,7 +191,7 @@ export async function listPensWithOccupancy(farmId: string): Promise<PenOption[]
     name: pen.name,
     housingType: pen.housingType,
     capacity: pen.capacity,
-    occupancy: pen._count.pigs,
+    occupancy: pen._count.animals,
   }));
 }
 
@@ -295,20 +295,20 @@ const detailInclude = {
     },
     orderBy: { breedingDate: "desc" },
   },
-} satisfies Prisma.PigInclude;
+} satisfies Prisma.AnimalInclude;
 
-export type AnimalDetail = Prisma.PigGetPayload<{ include: typeof detailInclude }>;
+export type AnimalDetail = Prisma.AnimalGetPayload<{ include: typeof detailInclude }>;
 
 export async function getAnimalWithRelations(
   farmId: string,
   id: string
 ): Promise<AnimalDetail | null> {
-  return prisma.pig.findFirst({ where: { id, farmId }, include: detailInclude });
+  return prisma.animal.findFirst({ where: { id, farmId }, include: detailInclude });
 }
 
 /** The plain row, for the edit form. */
 export async function getAnimal(farmId: string, id: string) {
-  return prisma.pig.findFirst({ where: { id, farmId } });
+  return prisma.animal.findFirst({ where: { id, farmId } });
 }
 
 /**
@@ -317,7 +317,7 @@ export async function getAnimal(farmId: string, id: string) {
  * Server Action re-checks both — a select is a suggestion, not a constraint.
  */
 export async function listParentCandidates(farmId: string) {
-  return prisma.pig.findMany({
+  return prisma.animal.findMany({
     where: { farmId },
     select: {
       id: true,
@@ -379,7 +379,7 @@ export function findSiblings(index: PedigreeIndex, id: string): SiblingGroups {
  * missing from its own recompute.
  */
 async function loadIndexWith(client: PrismaLike, farmId: string): Promise<PedigreeIndex> {
-  const rows = await client.pig.findMany({
+  const rows = await client.animal.findMany({
     where: { farmId },
     select: {
       id: true,
@@ -427,7 +427,7 @@ function withDescendants(index: PedigreeIndex, roots: string[]): Set<string> {
  * everything below it, and leaving those rows on their old cached F is how a
  * herd ends up making breeding decisions on numbers that were true last month.
  *
- * Other modules call this too — registering a litter creates piglets whose
+ * Other modules call this too — registering a litter creates offspring whose
  * generation and F are only knowable once their parents are attached.
  */
 export async function recomputePedigreeMetrics(
@@ -444,7 +444,7 @@ export async function recomputePedigreeMetrics(
   const calculator = createInbreedingCalculator(index);
 
   for (const id of affected) {
-    await client.pig.update({
+    await client.animal.update({
       where: { id },
       data: {
         generation: generationOf(index, id),

@@ -95,12 +95,12 @@ export async function setPenActive(id: string, isActive: boolean): Promise<void>
 
   const pen = await prisma.pen.findFirst({
     where: { id, farmId },
-    select: { id: true, _count: { select: { pigs: true } } },
+    select: { id: true, _count: { select: { animals: true } } },
   });
   if (!pen) throw new Error("Pen not found");
 
   if (!isActive) {
-    const occupants = await prisma.pig.count({ where: { penId: id, status: "ACTIVE" } });
+    const occupants = await prisma.animal.count({ where: { penId: id, status: "ACTIVE" } });
     if (occupants > 0) {
       throw new Error(
         `This pen still holds ${occupants} animal${occupants === 1 ? "" : "s"}. Move them out before retiring it.`

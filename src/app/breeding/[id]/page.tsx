@@ -35,8 +35,8 @@ import {
 import {
   getBreedingRecord,
   getSowProductivity,
-  pigletTagPrefix,
-  suggestPigletTags,
+  offspringTagPrefix,
+  suggestOffspringTags,
 } from "@/lib/db/breeding";
 import {
   recordWeaning,
@@ -69,7 +69,7 @@ export default async function BreedingRecordPage({ params }: PageProps<"/breedin
   const today = new Date();
   const suggestedTags = litter
     ? []
-    : await suggestPigletTags(farmId, record.dam.tagNumber, today, 30);
+    : await suggestOffspringTags(farmId, record.dam.tagNumber, today, 30);
 
   const f = record.offspringInbreedingCoefficient;
   const band =
@@ -182,8 +182,8 @@ export default async function BreedingRecordPage({ params }: PageProps<"/breedin
                 ? `${CONFIRMATION_METHOD_LABELS[record.confirmationMethod]} on ${formatDate(record.confirmationDate)}`
                 : "Not confirmed"}
             </Detail>
-            <Detail label="Expected piglets">
-              {record.expectedPigletCount === null ? "—" : String(record.expectedPigletCount)}
+            <Detail label="Expected offspring">
+              {record.expectedOffspringCount === null ? "—" : String(record.expectedOffspringCount)}
             </Detail>
             <Detail label="Abnormalities noted">{record.abnormalitiesNoted ?? "—"}</Detail>
             <Detail label="Recorded by">
@@ -227,9 +227,9 @@ export default async function BreedingRecordPage({ params }: PageProps<"/breedin
           </p>
           <dl className="space-y-2 text-sm">
             <Metric label="Parity (litters farrowed)" value={String(productivity.parity)} />
-            <Metric label="Lifetime pigs born" value={String(productivity.lifetimePigsBorn)} />
+            <Metric label="Lifetime animals born" value={String(productivity.lifetimeAnimalsBorn)} />
             <Metric label="Lifetime born alive" value={String(productivity.lifetimeBornAlive)} />
-            <Metric label="Lifetime pigs weaned" value={String(productivity.lifetimePigsWeaned)} />
+            <Metric label="Lifetime animals weaned" value={String(productivity.lifetimeAnimalsWeaned)} />
             <Metric
               label="Pigs born per litter"
               value={productivity.pigsBornPerLitter?.toFixed(1) ?? "—"}
@@ -317,15 +317,15 @@ export default async function BreedingRecordPage({ params }: PageProps<"/breedin
                   />
                 </Field>
 
-                <Field label="Expected piglet count" htmlFor="expectedPigletCount">
+                <Field label="Expected offspring count" htmlFor="expectedOffspringCount">
                   <Input
-                    id="expectedPigletCount"
-                    name="expectedPigletCount"
+                    id="expectedOffspringCount"
+                    name="expectedOffspringCount"
                     type="number"
                     min={0}
                     max={40}
                     inputMode="numeric"
-                    defaultValue={record.expectedPigletCount ?? ""}
+                    defaultValue={record.expectedOffspringCount ?? ""}
                   />
                 </Field>
               </div>
@@ -357,7 +357,7 @@ export default async function BreedingRecordPage({ params }: PageProps<"/breedin
           </h2>
           {litter ? (
             <Badge variant="success">
-              Farrowed {formatDate(litter.farrowingDate)} · {litter.piglets.length} piglets
+              Farrowed {formatDate(litter.farrowingDate)} · {litter.offspring.length} offspring
               registered
             </Badge>
           ) : null}
@@ -396,7 +396,7 @@ export default async function BreedingRecordPage({ params }: PageProps<"/breedin
 
             <div>
               <h3 className="mb-2 font-medium text-zinc-900 dark:text-zinc-50">
-                Piglets ({litter.piglets.length})
+                Offspring ({litter.offspring.length})
               </h3>
               <Table>
                 <Thead>
@@ -410,19 +410,19 @@ export default async function BreedingRecordPage({ params }: PageProps<"/breedin
                   </Tr>
                 </Thead>
                 <Tbody>
-                  {litter.piglets.map((piglet) => (
-                    <Tr key={piglet.id}>
+                  {litter.offspring.map((offspring) => (
+                    <Tr key={offspring.id}>
                       <Td className="whitespace-nowrap font-medium">
-                        <Link href={`/animals/${piglet.id}`} className="hover:underline">
-                          {piglet.tagNumber}
+                        <Link href={`/animals/${offspring.id}`} className="hover:underline">
+                          {offspring.tagNumber}
                         </Link>
                       </Td>
-                      <Td>{SEX_LABELS[piglet.sex]}</Td>
-                      <Td>{formatKg(piglet.birthWeightKg, 2)}</Td>
-                      <Td className="text-zinc-600 dark:text-zinc-400">{piglet.markings ?? "—"}</Td>
-                      <Td className="text-right tabular-nums">{piglet.generation}</Td>
+                      <Td>{SEX_LABELS[offspring.sex]}</Td>
+                      <Td>{formatKg(offspring.birthWeightKg, 2)}</Td>
+                      <Td className="text-zinc-600 dark:text-zinc-400">{offspring.markings ?? "—"}</Td>
+                      <Td className="text-right tabular-nums">{offspring.generation}</Td>
                       <Td className="text-right tabular-nums">
-                        {formatPercent(piglet.inbreedingCoefficient, 2)}
+                        {formatPercent(offspring.inbreedingCoefficient, 2)}
                       </Td>
                     </Tr>
                   ))}
@@ -451,7 +451,7 @@ export default async function BreedingRecordPage({ params }: PageProps<"/breedin
                   />
                 </Field>
                 <Field
-                  label="Piglets weaned"
+                  label="Offspring weaned"
                   htmlFor="weanedCount"
                   required
                   hint={`Up to the ${litter.bornAlive} born alive`}
@@ -464,7 +464,7 @@ export default async function BreedingRecordPage({ params }: PageProps<"/breedin
                     max={litter.bornAlive}
                     inputMode="numeric"
                     required
-                    defaultValue={litter.piglets.length}
+                    defaultValue={litter.offspring.length}
                   />
                 </Field>
                 <SubmitButton pendingLabel="Saving...">Record weaning</SubmitButton>
@@ -475,9 +475,9 @@ export default async function BreedingRecordPage({ params }: PageProps<"/breedin
           <FarrowingForm
             breedingRecordId={record.id}
             suggestedTags={suggestedTags}
-            tagPrefix={pigletTagPrefix(record.dam.tagNumber, today)}
+            tagPrefix={offspringTagPrefix(record.dam.tagNumber, today)}
             defaultFarrowingDate={toDateInputValue(today)}
-            expectedPigletCount={record.expectedPigletCount}
+            expectedOffspringCount={record.expectedOffspringCount}
           />
         ) : (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
