@@ -1372,3 +1372,30 @@ model BatchProductionRecord {
 
   @@index([batchId, collectedAt])
 }
+
+/// Throttling for the unauthenticated endpoints — sign-in, sign-up and
+/// password reset.
+///
+/// Stored rather than held in memory because the app runs serverless: an
+/// in-process counter is per-instance and per-cold-start, so an attacker gets
+/// a fresh allowance with every new lambda. A row per attempt makes the window
+/// a plain query, and old rows are pruned opportunistically on write.
+///
+/// The key is deliberately opaque — a hash of the identifier, never the email
+/// itself. A table of every address that has ever attempted a login is a
+/// disclosure risk in its own right, and this table has no business holding
+/// one.
+model AuthAttempt {
+  id String @id @default(cuid())
+
+  /// SHA-256 of the scope plus the identifier (email or client address).
+  keyHash     String
+  scope       String
+  attemptedAt DateTime @default(now())
+  /// False for a failed attempt. Successes are recorded too, so a correct
+  /// password does not silently reset an attacker's budget.
+  succeeded   Boolean  @default(false)
+
+  @@index([keyHash, attemptedAt])
+  @@index([attemptedAt])
+}

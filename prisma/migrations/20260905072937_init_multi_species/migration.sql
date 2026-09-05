@@ -5,7 +5,22 @@ CREATE TYPE "Role" AS ENUM ('ADMIN', 'MANAGER', 'VETERINARIAN', 'WORKER');
 CREATE TYPE "Sex" AS ENUM ('MALE', 'FEMALE');
 
 -- CreateEnum
-CREATE TYPE "PigStatus" AS ENUM ('ACTIVE', 'SOLD', 'DECEASED', 'CULLED', 'RETIRED');
+CREATE TYPE "TrackingMode" AS ENUM ('INDIVIDUAL', 'BATCH', 'HYBRID');
+
+-- CreateEnum
+CREATE TYPE "SpeciesPurpose" AS ENUM ('LIVESTOCK', 'WORKING');
+
+-- CreateEnum
+CREATE TYPE "BatchStatus" AS ENUM ('ACTIVE', 'SOLD', 'CLOSED');
+
+-- CreateEnum
+CREATE TYPE "BatchEventType" AS ENUM ('STOCKED', 'MORTALITY', 'CULL', 'TRANSFER_OUT', 'TRANSFER_IN', 'SALE', 'WEIGHT_SAMPLE');
+
+-- CreateEnum
+CREATE TYPE "BatchProductionType" AS ENUM ('EGGS', 'MILK', 'OTHER');
+
+-- CreateEnum
+CREATE TYPE "AnimalStatus" AS ENUM ('ACTIVE', 'SOLD', 'DECEASED', 'CULLED', 'RETIRED');
 
 -- CreateEnum
 CREATE TYPE "AcquisitionType" AS ENUM ('BORN_ON_FARM', 'PURCHASED');
@@ -14,10 +29,10 @@ CREATE TYPE "AcquisitionType" AS ENUM ('BORN_ON_FARM', 'PURCHASED');
 CREATE TYPE "ExitReason" AS ENUM ('SOLD', 'DIED', 'CULLED', 'SLAUGHTERED', 'BREEDING_RETIREMENT');
 
 -- CreateEnum
-CREATE TYPE "HousingType" AS ENUM ('FARROWING', 'GESTATION', 'BREEDING', 'NURSERY', 'GROWER', 'FINISHER', 'BOAR', 'ISOLATION', 'QUARANTINE');
+CREATE TYPE "HousingType" AS ENUM ('FARROWING', 'GESTATION', 'BREEDING', 'NURSERY', 'GROWER', 'FINISHER', 'BREEDING_MALE', 'ISOLATION', 'QUARANTINE');
 
 -- CreateEnum
-CREATE TYPE "LifeStage" AS ENUM ('PIGLET', 'WEANER', 'GROWER', 'FINISHER', 'GILT', 'SOW', 'BOAR');
+CREATE TYPE "LifeStage" AS ENUM ('YOUNG', 'WEANER', 'GROWER', 'FINISHER', 'MAIDEN_FEMALE', 'BREEDING_FEMALE', 'BREEDING_MALE');
 
 -- CreateEnum
 CREATE TYPE "BreedingMethod" AS ENUM ('NATURAL', 'ARTIFICIAL_INSEMINATION');
@@ -44,16 +59,16 @@ CREATE TYPE "HealthOutcome" AS ENUM ('RECOVERED', 'ONGOING', 'DEATH');
 CREATE TYPE "MedicationRoute" AS ENUM ('ORAL', 'INJECTION', 'FEED', 'TOPICAL');
 
 -- CreateEnum
-CREATE TYPE "FeedClassification" AS ENUM ('STARTER', 'WEANER', 'GROWER', 'FINISHER', 'GESTATION', 'LACTATION', 'BOAR', 'SUPPLEMENT');
+CREATE TYPE "FeedClassification" AS ENUM ('STARTER', 'WEANER', 'GROWER', 'FINISHER', 'GESTATION', 'LACTATION', 'BREEDING_MALE', 'SUPPLEMENT');
 
 -- CreateEnum
 CREATE TYPE "TransactionDirection" AS ENUM ('INCOME', 'EXPENSE');
 
 -- CreateEnum
-CREATE TYPE "TransactionCategory" AS ENUM ('FEED', 'VETERINARY', 'LABOR', 'HOUSING', 'UTILITIES', 'BEDDING', 'EQUIPMENT', 'BREEDING', 'TRANSPORT', 'MARKETING', 'OTHER_EXPENSE', 'PIGLET_SALE', 'FINISHED_PIG_SALE', 'CULL_SALE', 'BREEDING_STOCK_SALE', 'SERVICE_INCOME', 'OTHER_INCOME');
+CREATE TYPE "TransactionCategory" AS ENUM ('FEED', 'VETERINARY', 'LABOR', 'HOUSING', 'UTILITIES', 'BEDDING', 'EQUIPMENT', 'BREEDING', 'TRANSPORT', 'MARKETING', 'OTHER_EXPENSE', 'YOUNG_STOCK_SALE', 'FINISHED_PIG_SALE', 'CULL_SALE', 'BREEDING_STOCK_SALE', 'SERVICE_INCOME', 'OTHER_INCOME');
 
 -- CreateEnum
-CREATE TYPE "AnimalSaleType" AS ENUM ('FEEDER_PIG', 'FINISHED_PIG', 'BREEDING_STOCK', 'CULL');
+CREATE TYPE "AnimalSaleType" AS ENUM ('FEEDER', 'FINISHED_PIG', 'BREEDING_STOCK', 'CULL');
 
 -- CreateEnum
 CREATE TYPE "EquipmentStatus" AS ENUM ('IN_SERVICE', 'NEEDS_REPAIR', 'RETIRED');
@@ -119,15 +134,16 @@ CREATE TABLE "Profile" (
 );
 
 -- CreateTable
-CREATE TABLE "Pig" (
+CREATE TABLE "Animal" (
     "id" TEXT NOT NULL,
     "farmId" TEXT NOT NULL,
+    "speciesId" TEXT NOT NULL,
     "tagNumber" TEXT NOT NULL,
     "name" TEXT,
     "breed" TEXT NOT NULL,
     "dateOfBirth" TIMESTAMP(3) NOT NULL,
     "sex" "Sex" NOT NULL,
-    "status" "PigStatus" NOT NULL DEFAULT 'ACTIVE',
+    "status" "AnimalStatus" NOT NULL DEFAULT 'ACTIVE',
     "motherId" TEXT,
     "fatherId" TEXT,
     "generation" INTEGER NOT NULL DEFAULT 0,
@@ -150,13 +166,13 @@ CREATE TABLE "Pig" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "Pig_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "Animal_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "WeightRecord" (
     "id" TEXT NOT NULL,
-    "pigId" TEXT NOT NULL,
+    "animalId" TEXT NOT NULL,
     "recordedAt" TIMESTAMP(3) NOT NULL,
     "weightKg" DOUBLE PRECISION NOT NULL,
     "bodyConditionScore" INTEGER,
@@ -185,7 +201,7 @@ CREATE TABLE "Pen" (
 -- CreateTable
 CREATE TABLE "PenMovement" (
     "id" TEXT NOT NULL,
-    "pigId" TEXT NOT NULL,
+    "animalId" TEXT NOT NULL,
     "penId" TEXT,
     "fromPenName" TEXT,
     "toPenName" TEXT,
@@ -224,7 +240,7 @@ CREATE TABLE "BreedingRecord" (
     "pregnancyStatus" "PregnancyStatus" NOT NULL DEFAULT 'PENDING',
     "confirmationMethod" "ConfirmationMethod",
     "confirmationDate" TIMESTAMP(3),
-    "expectedPigletCount" INTEGER,
+    "expectedOffspringCount" INTEGER,
     "abnormalitiesNoted" TEXT,
     "offspringInbreedingCoefficient" DOUBLE PRECISION,
     "overrideReason" TEXT,
@@ -281,7 +297,8 @@ CREATE TABLE "EstrusRecord" (
 CREATE TABLE "HealthRecord" (
     "id" TEXT NOT NULL,
     "farmId" TEXT NOT NULL,
-    "pigId" TEXT NOT NULL,
+    "animalId" TEXT,
+    "batchId" TEXT,
     "recordedAt" TIMESTAMP(3) NOT NULL,
     "recordType" "HealthRecordType" NOT NULL,
     "category" "HealthCategory" NOT NULL,
@@ -320,6 +337,7 @@ CREATE TABLE "Medication" (
 
 -- CreateTable
 CREATE TABLE "VaccinationProtocolItem" (
+    "speciesId" TEXT,
     "id" TEXT NOT NULL,
     "farmId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -338,7 +356,7 @@ CREATE TABLE "VaccinationProtocolItem" (
 -- CreateTable
 CREATE TABLE "VaccinationRecord" (
     "id" TEXT NOT NULL,
-    "pigId" TEXT NOT NULL,
+    "animalId" TEXT NOT NULL,
     "protocolItemId" TEXT,
     "vaccineName" TEXT NOT NULL,
     "administeredAt" TIMESTAMP(3) NOT NULL,
@@ -433,6 +451,7 @@ CREATE TABLE "FeedingProgram" (
     "id" TEXT NOT NULL,
     "farmId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "speciesId" TEXT,
     "stage" "LifeStage" NOT NULL,
     "feedTypeId" TEXT NOT NULL,
     "dailyKgPerAnimal" DOUBLE PRECISION NOT NULL,
@@ -448,11 +467,12 @@ CREATE TABLE "FeedingProgram" (
 
 -- CreateTable
 CREATE TABLE "FeedingRecord" (
+    "batchId" TEXT,
     "id" TEXT NOT NULL,
     "farmId" TEXT NOT NULL,
     "fedAt" TIMESTAMP(3) NOT NULL,
     "penId" TEXT,
-    "pigId" TEXT,
+    "animalId" TEXT,
     "animalCount" INTEGER NOT NULL DEFAULT 1,
     "feedTypeId" TEXT NOT NULL,
     "feedBatchId" TEXT,
@@ -475,7 +495,7 @@ CREATE TABLE "FinancialTransaction" (
     "category" "TransactionCategory" NOT NULL,
     "amountCents" INTEGER NOT NULL,
     "description" TEXT,
-    "pigId" TEXT,
+    "animalId" TEXT,
     "feedBatchId" TEXT,
     "healthRecordId" TEXT,
     "animalSaleId" TEXT,
@@ -506,7 +526,7 @@ CREATE TABLE "AnimalSale" (
 CREATE TABLE "AnimalSaleItem" (
     "id" TEXT NOT NULL,
     "saleId" TEXT NOT NULL,
-    "pigId" TEXT NOT NULL,
+    "animalId" TEXT NOT NULL,
     "weightKg" DOUBLE PRECISION NOT NULL,
     "pricePerKgCents" INTEGER NOT NULL,
     "amountCents" INTEGER NOT NULL,
@@ -578,6 +598,105 @@ CREATE TABLE "AuditLog" (
     CONSTRAINT "AuditLog_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "Species" (
+    "id" TEXT NOT NULL,
+    "farmId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "code" TEXT NOT NULL,
+    "trackingMode" "TrackingMode" NOT NULL DEFAULT 'INDIVIDUAL',
+    "purpose" "SpeciesPurpose" NOT NULL DEFAULT 'LIVESTOCK',
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "gestationDays" INTEGER,
+    "gestationToleranceDays" INTEGER NOT NULL DEFAULT 3,
+    "estrusCycleDays" INTEGER,
+    "weaningAgeDays" INTEGER,
+    "minBreedingAgeDaysFemale" INTEGER,
+    "minBreedingAgeDaysMale" INTEGER,
+    "minBreedingWeightKg" DOUBLE PRECISION,
+    "typicalLitterSize" INTEGER,
+    "hasSex" BOOLEAN NOT NULL DEFAULT true,
+    "tracksPedigree" BOOLEAN NOT NULL DEFAULT true,
+    "birthEventTerm" TEXT NOT NULL DEFAULT 'birth',
+    "youngTerm" TEXT NOT NULL DEFAULT 'young',
+    "adultFemaleTerm" TEXT NOT NULL DEFAULT 'female',
+    "adultMaleTerm" TEXT NOT NULL DEFAULT 'male',
+    "groupTerm" TEXT NOT NULL DEFAULT 'group',
+    "bodyConditionScaleMax" INTEGER NOT NULL DEFAULT 5,
+    "notes" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Species_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AnimalBatch" (
+    "id" TEXT NOT NULL,
+    "farmId" TEXT NOT NULL,
+    "speciesId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "batchCode" TEXT NOT NULL,
+    "penId" TEXT,
+    "status" "BatchStatus" NOT NULL DEFAULT 'ACTIVE',
+    "startDate" TIMESTAMP(3) NOT NULL,
+    "startAgeDays" INTEGER NOT NULL DEFAULT 0,
+    "endDate" TIMESTAMP(3),
+    "initialCount" INTEGER NOT NULL,
+    "currentCount" INTEGER NOT NULL,
+    "source" TEXT,
+    "acquisitionCostCents" INTEGER,
+    "avgWeightKg" DOUBLE PRECISION,
+    "notes" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "AnimalBatch_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "BatchEvent" (
+    "id" TEXT NOT NULL,
+    "batchId" TEXT NOT NULL,
+    "eventType" "BatchEventType" NOT NULL,
+    "occurredAt" TIMESTAMP(3) NOT NULL,
+    "quantity" INTEGER NOT NULL DEFAULT 0,
+    "weightKg" DOUBLE PRECISION,
+    "reason" TEXT,
+    "notes" TEXT,
+    "createdByProfileId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "BatchEvent_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "BatchProductionRecord" (
+    "id" TEXT NOT NULL,
+    "batchId" TEXT NOT NULL,
+    "productionType" "BatchProductionType" NOT NULL DEFAULT 'EGGS',
+    "collectedAt" TIMESTAMP(3) NOT NULL,
+    "quantity" DOUBLE PRECISION NOT NULL,
+    "unit" TEXT NOT NULL DEFAULT 'count',
+    "rejectedQuantity" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "notes" TEXT,
+    "createdByProfileId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "BatchProductionRecord_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AuthAttempt" (
+    "id" TEXT NOT NULL,
+    "keyHash" TEXT NOT NULL,
+    "scope" TEXT NOT NULL,
+    "attemptedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "succeeded" BOOLEAN NOT NULL DEFAULT false,
+
+    CONSTRAINT "AuthAttempt_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "Farm_name_key" ON "Farm"("name");
 
@@ -588,28 +707,31 @@ CREATE UNIQUE INDEX "FarmSettings_farmId_key" ON "FarmSettings"("farmId");
 CREATE INDEX "Profile_farmId_idx" ON "Profile"("farmId");
 
 -- CreateIndex
-CREATE INDEX "Pig_farmId_status_idx" ON "Pig"("farmId", "status");
+CREATE INDEX "Animal_speciesId_status_idx" ON "Animal"("speciesId", "status");
 
 -- CreateIndex
-CREATE INDEX "Pig_motherId_idx" ON "Pig"("motherId");
+CREATE INDEX "Animal_farmId_status_idx" ON "Animal"("farmId", "status");
 
 -- CreateIndex
-CREATE INDEX "Pig_fatherId_idx" ON "Pig"("fatherId");
+CREATE INDEX "Animal_motherId_idx" ON "Animal"("motherId");
 
 -- CreateIndex
-CREATE INDEX "Pig_penId_idx" ON "Pig"("penId");
+CREATE INDEX "Animal_fatherId_idx" ON "Animal"("fatherId");
 
 -- CreateIndex
-CREATE INDEX "Pig_farmId_sex_status_idx" ON "Pig"("farmId", "sex", "status");
+CREATE INDEX "Animal_penId_idx" ON "Animal"("penId");
 
 -- CreateIndex
-CREATE INDEX "Pig_dateOfBirth_idx" ON "Pig"("dateOfBirth");
+CREATE INDEX "Animal_farmId_sex_status_idx" ON "Animal"("farmId", "sex", "status");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Pig_farmId_tagNumber_key" ON "Pig"("farmId", "tagNumber");
+CREATE INDEX "Animal_dateOfBirth_idx" ON "Animal"("dateOfBirth");
 
 -- CreateIndex
-CREATE INDEX "WeightRecord_pigId_recordedAt_idx" ON "WeightRecord"("pigId", "recordedAt");
+CREATE UNIQUE INDEX "Animal_farmId_tagNumber_key" ON "Animal"("farmId", "tagNumber");
+
+-- CreateIndex
+CREATE INDEX "WeightRecord_animalId_recordedAt_idx" ON "WeightRecord"("animalId", "recordedAt");
 
 -- CreateIndex
 CREATE INDEX "Pen_farmId_housingType_idx" ON "Pen"("farmId", "housingType");
@@ -618,7 +740,7 @@ CREATE INDEX "Pen_farmId_housingType_idx" ON "Pen"("farmId", "housingType");
 CREATE UNIQUE INDEX "Pen_farmId_name_key" ON "Pen"("farmId", "name");
 
 -- CreateIndex
-CREATE INDEX "PenMovement_pigId_movedAt_idx" ON "PenMovement"("pigId", "movedAt");
+CREATE INDEX "PenMovement_animalId_movedAt_idx" ON "PenMovement"("animalId", "movedAt");
 
 -- CreateIndex
 CREATE INDEX "PenMovement_penId_movedAt_idx" ON "PenMovement"("penId", "movedAt");
@@ -651,7 +773,10 @@ CREATE INDEX "EstrusRecord_sowId_observedAt_idx" ON "EstrusRecord"("sowId", "obs
 CREATE INDEX "HealthRecord_farmId_recordedAt_idx" ON "HealthRecord"("farmId", "recordedAt");
 
 -- CreateIndex
-CREATE INDEX "HealthRecord_pigId_recordedAt_idx" ON "HealthRecord"("pigId", "recordedAt");
+CREATE INDEX "HealthRecord_animalId_recordedAt_idx" ON "HealthRecord"("animalId", "recordedAt");
+
+-- CreateIndex
+CREATE INDEX "HealthRecord_batchId_recordedAt_idx" ON "HealthRecord"("batchId", "recordedAt");
 
 -- CreateIndex
 CREATE INDEX "HealthRecord_farmId_category_recordedAt_idx" ON "HealthRecord"("farmId", "category", "recordedAt");
@@ -669,7 +794,7 @@ CREATE INDEX "Medication_drugName_idx" ON "Medication"("drugName");
 CREATE INDEX "VaccinationProtocolItem_farmId_targetStage_idx" ON "VaccinationProtocolItem"("farmId", "targetStage");
 
 -- CreateIndex
-CREATE INDEX "VaccinationRecord_pigId_administeredAt_idx" ON "VaccinationRecord"("pigId", "administeredAt");
+CREATE INDEX "VaccinationRecord_animalId_administeredAt_idx" ON "VaccinationRecord"("animalId", "administeredAt");
 
 -- CreateIndex
 CREATE INDEX "VaccinationRecord_nextDueDate_idx" ON "VaccinationRecord"("nextDueDate");
@@ -708,7 +833,7 @@ CREATE INDEX "FeedingRecord_farmId_fedAt_idx" ON "FeedingRecord"("farmId", "fedA
 CREATE INDEX "FeedingRecord_penId_fedAt_idx" ON "FeedingRecord"("penId", "fedAt");
 
 -- CreateIndex
-CREATE INDEX "FeedingRecord_pigId_fedAt_idx" ON "FeedingRecord"("pigId", "fedAt");
+CREATE INDEX "FeedingRecord_animalId_fedAt_idx" ON "FeedingRecord"("animalId", "fedAt");
 
 -- CreateIndex
 CREATE INDEX "FeedingRecord_feedBatchId_idx" ON "FeedingRecord"("feedBatchId");
@@ -723,16 +848,16 @@ CREATE INDEX "FinancialTransaction_farmId_direction_occurredAt_idx" ON "Financia
 CREATE INDEX "FinancialTransaction_farmId_category_occurredAt_idx" ON "FinancialTransaction"("farmId", "category", "occurredAt");
 
 -- CreateIndex
-CREATE INDEX "FinancialTransaction_pigId_idx" ON "FinancialTransaction"("pigId");
+CREATE INDEX "FinancialTransaction_animalId_idx" ON "FinancialTransaction"("animalId");
 
 -- CreateIndex
 CREATE INDEX "AnimalSale_farmId_soldAt_idx" ON "AnimalSale"("farmId", "soldAt");
 
 -- CreateIndex
-CREATE INDEX "AnimalSaleItem_pigId_idx" ON "AnimalSaleItem"("pigId");
+CREATE INDEX "AnimalSaleItem_animalId_idx" ON "AnimalSaleItem"("animalId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "AnimalSaleItem_saleId_pigId_key" ON "AnimalSaleItem"("saleId", "pigId");
+CREATE UNIQUE INDEX "AnimalSaleItem_saleId_animalId_key" ON "AnimalSaleItem"("saleId", "animalId");
 
 -- CreateIndex
 CREATE INDEX "Equipment_farmId_status_idx" ON "Equipment"("farmId", "status");
@@ -755,6 +880,42 @@ CREATE INDEX "AuditLog_farmId_createdAt_idx" ON "AuditLog"("farmId", "createdAt"
 -- CreateIndex
 CREATE INDEX "AuditLog_entityType_entityId_idx" ON "AuditLog"("entityType", "entityId");
 
+-- CreateIndex
+CREATE INDEX "Species_farmId_trackingMode_idx" ON "Species"("farmId", "trackingMode");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Species_farmId_name_key" ON "Species"("farmId", "name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Species_farmId_code_key" ON "Species"("farmId", "code");
+
+-- CreateIndex
+CREATE INDEX "AnimalBatch_farmId_status_idx" ON "AnimalBatch"("farmId", "status");
+
+-- CreateIndex
+CREATE INDEX "AnimalBatch_speciesId_idx" ON "AnimalBatch"("speciesId");
+
+-- CreateIndex
+CREATE INDEX "AnimalBatch_penId_idx" ON "AnimalBatch"("penId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AnimalBatch_farmId_batchCode_key" ON "AnimalBatch"("farmId", "batchCode");
+
+-- CreateIndex
+CREATE INDEX "BatchEvent_batchId_occurredAt_idx" ON "BatchEvent"("batchId", "occurredAt");
+
+-- CreateIndex
+CREATE INDEX "BatchEvent_eventType_idx" ON "BatchEvent"("eventType");
+
+-- CreateIndex
+CREATE INDEX "BatchProductionRecord_batchId_collectedAt_idx" ON "BatchProductionRecord"("batchId", "collectedAt");
+
+-- CreateIndex
+CREATE INDEX "AuthAttempt_keyHash_attemptedAt_idx" ON "AuthAttempt"("keyHash", "attemptedAt");
+
+-- CreateIndex
+CREATE INDEX "AuthAttempt_attemptedAt_idx" ON "AuthAttempt"("attemptedAt");
+
 -- AddForeignKey
 ALTER TABLE "FarmSettings" ADD CONSTRAINT "FarmSettings_farmId_fkey" FOREIGN KEY ("farmId") REFERENCES "Farm"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -762,22 +923,25 @@ ALTER TABLE "FarmSettings" ADD CONSTRAINT "FarmSettings_farmId_fkey" FOREIGN KEY
 ALTER TABLE "Profile" ADD CONSTRAINT "Profile_farmId_fkey" FOREIGN KEY ("farmId") REFERENCES "Farm"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Pig" ADD CONSTRAINT "Pig_farmId_fkey" FOREIGN KEY ("farmId") REFERENCES "Farm"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Animal" ADD CONSTRAINT "Animal_farmId_fkey" FOREIGN KEY ("farmId") REFERENCES "Farm"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Pig" ADD CONSTRAINT "Pig_motherId_fkey" FOREIGN KEY ("motherId") REFERENCES "Pig"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Animal" ADD CONSTRAINT "Animal_speciesId_fkey" FOREIGN KEY ("speciesId") REFERENCES "Species"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Pig" ADD CONSTRAINT "Pig_fatherId_fkey" FOREIGN KEY ("fatherId") REFERENCES "Pig"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Animal" ADD CONSTRAINT "Animal_motherId_fkey" FOREIGN KEY ("motherId") REFERENCES "Animal"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Pig" ADD CONSTRAINT "Pig_litterId_fkey" FOREIGN KEY ("litterId") REFERENCES "Litter"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Animal" ADD CONSTRAINT "Animal_fatherId_fkey" FOREIGN KEY ("fatherId") REFERENCES "Animal"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Pig" ADD CONSTRAINT "Pig_penId_fkey" FOREIGN KEY ("penId") REFERENCES "Pen"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Animal" ADD CONSTRAINT "Animal_litterId_fkey" FOREIGN KEY ("litterId") REFERENCES "Litter"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "WeightRecord" ADD CONSTRAINT "WeightRecord_pigId_fkey" FOREIGN KEY ("pigId") REFERENCES "Pig"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Animal" ADD CONSTRAINT "Animal_penId_fkey" FOREIGN KEY ("penId") REFERENCES "Pen"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WeightRecord" ADD CONSTRAINT "WeightRecord_animalId_fkey" FOREIGN KEY ("animalId") REFERENCES "Animal"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "WeightRecord" ADD CONSTRAINT "WeightRecord_recordedByProfileId_fkey" FOREIGN KEY ("recordedByProfileId") REFERENCES "Profile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -786,7 +950,7 @@ ALTER TABLE "WeightRecord" ADD CONSTRAINT "WeightRecord_recordedByProfileId_fkey
 ALTER TABLE "Pen" ADD CONSTRAINT "Pen_farmId_fkey" FOREIGN KEY ("farmId") REFERENCES "Farm"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "PenMovement" ADD CONSTRAINT "PenMovement_pigId_fkey" FOREIGN KEY ("pigId") REFERENCES "Pig"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "PenMovement" ADD CONSTRAINT "PenMovement_animalId_fkey" FOREIGN KEY ("animalId") REFERENCES "Animal"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "PenMovement" ADD CONSTRAINT "PenMovement_penId_fkey" FOREIGN KEY ("penId") REFERENCES "Pen"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -804,10 +968,10 @@ ALTER TABLE "PenTask" ADD CONSTRAINT "PenTask_performedByProfileId_fkey" FOREIGN
 ALTER TABLE "BreedingRecord" ADD CONSTRAINT "BreedingRecord_farmId_fkey" FOREIGN KEY ("farmId") REFERENCES "Farm"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "BreedingRecord" ADD CONSTRAINT "BreedingRecord_damId_fkey" FOREIGN KEY ("damId") REFERENCES "Pig"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "BreedingRecord" ADD CONSTRAINT "BreedingRecord_damId_fkey" FOREIGN KEY ("damId") REFERENCES "Animal"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "BreedingRecord" ADD CONSTRAINT "BreedingRecord_sireId_fkey" FOREIGN KEY ("sireId") REFERENCES "Pig"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "BreedingRecord" ADD CONSTRAINT "BreedingRecord_sireId_fkey" FOREIGN KEY ("sireId") REFERENCES "Animal"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "BreedingRecord" ADD CONSTRAINT "BreedingRecord_createdByProfileId_fkey" FOREIGN KEY ("createdByProfileId") REFERENCES "Profile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -819,7 +983,7 @@ ALTER TABLE "Litter" ADD CONSTRAINT "Litter_breedingRecordId_fkey" FOREIGN KEY (
 ALTER TABLE "Litter" ADD CONSTRAINT "Litter_createdByProfileId_fkey" FOREIGN KEY ("createdByProfileId") REFERENCES "Profile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "EstrusRecord" ADD CONSTRAINT "EstrusRecord_sowId_fkey" FOREIGN KEY ("sowId") REFERENCES "Pig"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "EstrusRecord" ADD CONSTRAINT "EstrusRecord_sowId_fkey" FOREIGN KEY ("sowId") REFERENCES "Animal"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "EstrusRecord" ADD CONSTRAINT "EstrusRecord_createdByProfileId_fkey" FOREIGN KEY ("createdByProfileId") REFERENCES "Profile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -828,7 +992,10 @@ ALTER TABLE "EstrusRecord" ADD CONSTRAINT "EstrusRecord_createdByProfileId_fkey"
 ALTER TABLE "HealthRecord" ADD CONSTRAINT "HealthRecord_farmId_fkey" FOREIGN KEY ("farmId") REFERENCES "Farm"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "HealthRecord" ADD CONSTRAINT "HealthRecord_pigId_fkey" FOREIGN KEY ("pigId") REFERENCES "Pig"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "HealthRecord" ADD CONSTRAINT "HealthRecord_animalId_fkey" FOREIGN KEY ("animalId") REFERENCES "Animal"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HealthRecord" ADD CONSTRAINT "HealthRecord_batchId_fkey" FOREIGN KEY ("batchId") REFERENCES "AnimalBatch"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "HealthRecord" ADD CONSTRAINT "HealthRecord_createdByProfileId_fkey" FOREIGN KEY ("createdByProfileId") REFERENCES "Profile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -837,10 +1004,13 @@ ALTER TABLE "HealthRecord" ADD CONSTRAINT "HealthRecord_createdByProfileId_fkey"
 ALTER TABLE "Medication" ADD CONSTRAINT "Medication_healthRecordId_fkey" FOREIGN KEY ("healthRecordId") REFERENCES "HealthRecord"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "VaccinationProtocolItem" ADD CONSTRAINT "VaccinationProtocolItem_speciesId_fkey" FOREIGN KEY ("speciesId") REFERENCES "Species"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "VaccinationProtocolItem" ADD CONSTRAINT "VaccinationProtocolItem_farmId_fkey" FOREIGN KEY ("farmId") REFERENCES "Farm"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "VaccinationRecord" ADD CONSTRAINT "VaccinationRecord_pigId_fkey" FOREIGN KEY ("pigId") REFERENCES "Pig"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "VaccinationRecord" ADD CONSTRAINT "VaccinationRecord_animalId_fkey" FOREIGN KEY ("animalId") REFERENCES "Animal"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "VaccinationRecord" ADD CONSTRAINT "VaccinationRecord_protocolItemId_fkey" FOREIGN KEY ("protocolItemId") REFERENCES "VaccinationProtocolItem"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -876,7 +1046,13 @@ ALTER TABLE "FeedBatch" ADD CONSTRAINT "FeedBatch_receivedByProfileId_fkey" FORE
 ALTER TABLE "FeedingProgram" ADD CONSTRAINT "FeedingProgram_farmId_fkey" FOREIGN KEY ("farmId") REFERENCES "Farm"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "FeedingProgram" ADD CONSTRAINT "FeedingProgram_speciesId_fkey" FOREIGN KEY ("speciesId") REFERENCES "Species"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "FeedingProgram" ADD CONSTRAINT "FeedingProgram_feedTypeId_fkey" FOREIGN KEY ("feedTypeId") REFERENCES "FeedType"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "FeedingRecord" ADD CONSTRAINT "FeedingRecord_batchId_fkey" FOREIGN KEY ("batchId") REFERENCES "AnimalBatch"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "FeedingRecord" ADD CONSTRAINT "FeedingRecord_farmId_fkey" FOREIGN KEY ("farmId") REFERENCES "Farm"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -885,7 +1061,7 @@ ALTER TABLE "FeedingRecord" ADD CONSTRAINT "FeedingRecord_farmId_fkey" FOREIGN K
 ALTER TABLE "FeedingRecord" ADD CONSTRAINT "FeedingRecord_penId_fkey" FOREIGN KEY ("penId") REFERENCES "Pen"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "FeedingRecord" ADD CONSTRAINT "FeedingRecord_pigId_fkey" FOREIGN KEY ("pigId") REFERENCES "Pig"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "FeedingRecord" ADD CONSTRAINT "FeedingRecord_animalId_fkey" FOREIGN KEY ("animalId") REFERENCES "Animal"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "FeedingRecord" ADD CONSTRAINT "FeedingRecord_feedTypeId_fkey" FOREIGN KEY ("feedTypeId") REFERENCES "FeedType"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -900,7 +1076,7 @@ ALTER TABLE "FeedingRecord" ADD CONSTRAINT "FeedingRecord_recordedByProfileId_fk
 ALTER TABLE "FinancialTransaction" ADD CONSTRAINT "FinancialTransaction_farmId_fkey" FOREIGN KEY ("farmId") REFERENCES "Farm"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "FinancialTransaction" ADD CONSTRAINT "FinancialTransaction_pigId_fkey" FOREIGN KEY ("pigId") REFERENCES "Pig"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "FinancialTransaction" ADD CONSTRAINT "FinancialTransaction_animalId_fkey" FOREIGN KEY ("animalId") REFERENCES "Animal"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "FinancialTransaction" ADD CONSTRAINT "FinancialTransaction_animalSaleId_fkey" FOREIGN KEY ("animalSaleId") REFERENCES "AnimalSale"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -918,7 +1094,7 @@ ALTER TABLE "AnimalSale" ADD CONSTRAINT "AnimalSale_createdByProfileId_fkey" FOR
 ALTER TABLE "AnimalSaleItem" ADD CONSTRAINT "AnimalSaleItem_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "AnimalSale"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "AnimalSaleItem" ADD CONSTRAINT "AnimalSaleItem_pigId_fkey" FOREIGN KEY ("pigId") REFERENCES "Pig"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "AnimalSaleItem" ADD CONSTRAINT "AnimalSaleItem_animalId_fkey" FOREIGN KEY ("animalId") REFERENCES "Animal"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Equipment" ADD CONSTRAINT "Equipment_farmId_fkey" FOREIGN KEY ("farmId") REFERENCES "Farm"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -940,3 +1116,27 @@ ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_farmId_fkey" FOREIGN KEY ("farmI
 
 -- AddForeignKey
 ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_profileId_fkey" FOREIGN KEY ("profileId") REFERENCES "Profile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Species" ADD CONSTRAINT "Species_farmId_fkey" FOREIGN KEY ("farmId") REFERENCES "Farm"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AnimalBatch" ADD CONSTRAINT "AnimalBatch_farmId_fkey" FOREIGN KEY ("farmId") REFERENCES "Farm"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AnimalBatch" ADD CONSTRAINT "AnimalBatch_speciesId_fkey" FOREIGN KEY ("speciesId") REFERENCES "Species"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AnimalBatch" ADD CONSTRAINT "AnimalBatch_penId_fkey" FOREIGN KEY ("penId") REFERENCES "Pen"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "BatchEvent" ADD CONSTRAINT "BatchEvent_batchId_fkey" FOREIGN KEY ("batchId") REFERENCES "AnimalBatch"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "BatchEvent" ADD CONSTRAINT "BatchEvent_createdByProfileId_fkey" FOREIGN KEY ("createdByProfileId") REFERENCES "Profile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "BatchProductionRecord" ADD CONSTRAINT "BatchProductionRecord_batchId_fkey" FOREIGN KEY ("batchId") REFERENCES "AnimalBatch"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "BatchProductionRecord" ADD CONSTRAINT "BatchProductionRecord_createdByProfileId_fkey" FOREIGN KEY ("createdByProfileId") REFERENCES "Profile"("id") ON DELETE SET NULL ON UPDATE CASCADE;

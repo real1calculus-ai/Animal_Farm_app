@@ -14,13 +14,13 @@
  * current to show.
  */
 
-import { PrismaClient, type Prisma, type Sex } from "@prisma/client";
+import { PrismaClient, type HousingType, type Prisma, type Sex } from "@prisma/client";
 
-import { ensureSpeciesCatalogue } from "../src/lib/db/species";
+import { SPECIES_CATALOGUE } from "../src/lib/species-catalogue";
 
 const prisma = new PrismaClient();
 
-const FARM_NAME = "Green Pastures Piggery";
+const FARM_NAME = "Green Pastures Farm";
 const DAY = 86_400_000;
 
 const now = new Date();
@@ -61,7 +61,10 @@ async function main() {
 
   // Species carry the biology every projected date depends on, so they have to
   // exist before a single animal does.
-  await ensureSpeciesCatalogue(farm.id);
+  await prisma.species.createMany({
+    data: SPECIES_CATALOGUE.map((entry) => ({ ...entry, farmId: farm.id })),
+    skipDuplicates: true,
+  });
   const speciesRows = await prisma.species.findMany({ where: { farmId: farm.id } });
   const species = new Map(speciesRows.map((row) => [row.code, row]));
   const pigSpeciesId = species.get("PIG")!.id;
@@ -198,6 +201,8 @@ async function main() {
     },
   });
 
+  await seedOtherSpecies(farm.id, species);
+
   await seedWeights(farm.id);
   await seedHealth(farm.id, [litterA[0], litterC[1], ngozi]);
   await seedFeed(farm.id, pens.grower.id, pens.finisher.id);
@@ -205,7 +210,10 @@ async function main() {
   await seedOverheads(farm.id);
 
   const total = await prisma.animal.count({ where: { farmId: farm.id } });
-  console.log(`Seeded "${FARM_NAME}": ${total} animals across ${Object.keys(pens).length} pens.`);
+  const batches = await prisma.animalBatch.count({ where: { farmId: farm.id } });
+  console.log(
+    `Seeded "${FARM_NAME}": ${total} individually-tracked animals and ${batches} batches, across ${speciesRows.length} species.`
+  );
   console.log("Sign up in the app — the first account becomes this farm's administrator.");
 }
 
@@ -713,3 +721,281 @@ main()
     await prisma.$disconnect();
     process.exit(1);
   });
+
+/**
+ * The rest of the farm: goats, rabbits, guard dogs, and the batch-tracked
+ * enterprises — broilers, layers, catfish and snails.
+ *
+ * Deliberately mixed, because the point of the demo is to show that the three
+ * tracking modes coexist: a named goat with a pedigree, a rabbit doe whose
+ * kits are counted rather than tagged, and a house of 500 birds that is one
+ * row with an event log behind it.
+ */
+async function seedOtherSpecies(farmId: string, species: Map<string, { id: string }>) {
+  const penFor = async (name: string, housingType: HousingType, capacity: number) =>
+    prisma.pen.upsert({
+      where: { farmId_name: { farmId, name } },
+      update: {},
+      create: { farmId, name, housingType, capacity },
+      select: { id: true },
+    });
+
+  const [goatHouse, rabbitry, broilerHouse, layerHouse, pond, snailPen, kennel] = await Promise.all([
+    penFor("Goat house", "GROWER", 40),
+    penFor("Rabbitry", "GROWER", 60),
+    penFor("Broiler house 1", "GROWER", 600),
+    penFor("Layer house 1", "GROWER", 400),
+    penFor("Catfish pond 1", "GROWER", 2000),
+    penFor("Snailery 1", "GROWER", 1000),
+    penFor("Kennel", "ISOLATION", 4),
+  ]);
+
+  // --- Goats: individually tracked, one kidding on record ----------------
+  const goatId = species.get("GOA")!.id;
+
+  const [buck, doeA, doeB] = await Promise.all([
+    createAnimal(farmId, { speciesId: goatId, tag: "G-001", name: "Sango", breed: "West African Dwarf", sex: "MALE", ageDays: 900, penId: goatHouse.id, weightKg: 38, bcs: 3 }),
+    createAnimal(farmId, { speciesId: goatId, tag: "G-002", name: "Yemi", breed: "West African Dwarf", sex: "FEMALE", ageDays: 820, penId: goatHouse.id, weightKg: 31, bcs: 3 }),
+    createAnimal(farmId, { speciesId: goatId, tag: "G-003", name: "Titi", breed: "Red Sokoto", sex: "FEMALE", ageDays: 760, penId: goatHouse.id, weightKg: 29, bcs: 2 }),
+  ]);
+
+  // Goat gestation is 150 days, not the pig's 114 — the whole reason the
+  // figure lives on the species rather than in a constant.
+  await breedAndFarrow(farmId, 150, {
+    speciesId: goatId,
+    sire: buck,
+    dam: doeA,
+    bredDaysAgo: 300,
+    bornAlive: 2,
+    stillborn: 0,
+    penId: goatHouse.id,
+    tagPrefix: "GK1",
+    offspring: [
+      { sex: "FEMALE", breed: "West African Dwarf" },
+      { sex: "MALE", breed: "West African Dwarf" },
+    ],
+  });
+
+  // An open doe due to be bred — gives the match finder a second species.
+  void doeB;
+
+  // --- Rabbits: hybrid. Does named, kits counted ------------------------
+  const rabbitId = species.get("RAB")!.id;
+  await Promise.all([
+    createAnimal(farmId, { speciesId: rabbitId, tag: "R-001", name: "Snow", breed: "New Zealand White", sex: "FEMALE", ageDays: 400, penId: rabbitry.id, weightKg: 4.2, bcs: 3 }),
+    createAnimal(farmId, { speciesId: rabbitId, tag: "R-002", name: "Ash", breed: "Chinchilla", sex: "FEMALE", ageDays: 380, penId: rabbitry.id, weightKg: 4.0, bcs: 3 }),
+    createAnimal(farmId, { speciesId: rabbitId, tag: "R-003", name: "Bolt", breed: "New Zealand White", sex: "MALE", ageDays: 420, penId: rabbitry.id, weightKg: 4.6, bcs: 3 }),
+  ]);
+
+  // --- Guard dogs: working animals, never production --------------------
+  const dogId = species.get("DOG")!.id;
+  const dogs = await Promise.all([
+    createAnimal(farmId, { speciesId: dogId, tag: "D-001", name: "Bingo", breed: "Nigerian local", sex: "MALE", ageDays: 1300, penId: kennel.id, weightKg: 24, bcs: 5 }),
+    createAnimal(farmId, { speciesId: dogId, tag: "D-002", name: "Sasha", breed: "German Shepherd", sex: "FEMALE", ageDays: 900, penId: kennel.id, weightKg: 28, bcs: 5 }),
+  ]);
+
+  // Rabies is the record that matters for a farm dog — annually, by law in
+  // most places, and the one vaccination a working animal cannot skip.
+  for (const dog of dogs) {
+    await prisma.vaccinationRecord.create({
+      data: {
+        animalId: dog.id,
+        vaccineName: "Rabies",
+        administeredAt: daysAgo(200),
+        lotNumber: "RAB-8821",
+        veterinarian: "Dr. Okafor",
+        nextDueDate: daysAhead(165),
+      },
+    });
+  }
+
+  // --- Batch enterprises -------------------------------------------------
+  await seedBatch(farmId, {
+    speciesId: species.get("BRO")!.id,
+    name: "Broilers — August intake",
+    batchCode: "BRO-2608",
+    penId: broilerHouse.id,
+    startDaysAgo: 38,
+    initialCount: 500,
+    startAgeDays: 0,
+    source: "Zartech hatchery",
+    unitCostCents: naira(1_100),
+    // Broiler mortality is front-loaded: most of the loss is in the first
+    // week, and a flat rate across the cycle would hide exactly the problem
+    // a farmer needs to catch.
+    mortality: [
+      { daysAgo: 36, count: 9, reason: "First-week losses — weak chicks" },
+      { daysAgo: 30, count: 4, reason: "Culled runts" },
+      { daysAgo: 18, count: 3, reason: "Heat stress" },
+      { daysAgo: 6, count: 2, reason: "Leg weakness" },
+    ],
+    weights: [
+      { daysAgo: 24, avgKg: 0.75 },
+      { daysAgo: 10, avgKg: 1.6 },
+      { daysAgo: 2, avgKg: 2.25 },
+    ],
+  });
+
+  const layers = await seedBatch(farmId, {
+    speciesId: species.get("LAY")!.id,
+    name: "Layers — point of lay",
+    batchCode: "LAY-2603",
+    penId: layerHouse.id,
+    startDaysAgo: 220,
+    initialCount: 300,
+    startAgeDays: 112,
+    source: "CHI Farms",
+    unitCostCents: naira(2_400),
+    mortality: [
+      { daysAgo: 200, count: 5, reason: "Transport stress" },
+      { daysAgo: 90, count: 3, reason: "Prolapse" },
+    ],
+    weights: [{ daysAgo: 30, avgKg: 1.8 }],
+  });
+
+  // Thirty days of egg collection, so lay percentage has a series behind it.
+  for (let day = 30; day >= 1; day--) {
+    const flock = 292;
+    const rate = 0.82 + (day % 5) * 0.01;
+    const collected = Math.round(flock * rate);
+    await prisma.batchProductionRecord.create({
+      data: {
+        batchId: layers.id,
+        productionType: "EGGS",
+        collectedAt: daysAgo(day),
+        quantity: collected,
+        unit: "eggs",
+        // Cracked and dirty eggs count toward lay rate but not toward revenue,
+        // which is why they are recorded separately rather than netted off.
+        rejectedQuantity: Math.round(collected * 0.03),
+      },
+    });
+  }
+
+  await seedBatch(farmId, {
+    speciesId: species.get("CFH")!.id,
+    name: "Catfish — pond 1",
+    batchCode: "CFH-2605",
+    penId: pond.id,
+    startDaysAgo: 120,
+    initialCount: 1500,
+    startAgeDays: 42,
+    source: "Local hatchery",
+    unitCostCents: naira(80),
+    mortality: [
+      { daysAgo: 110, count: 60, reason: "Post-stocking adjustment" },
+      { daysAgo: 60, count: 25, reason: "Water quality — low dissolved oxygen" },
+    ],
+    weights: [
+      { daysAgo: 60, avgKg: 0.25 },
+      { daysAgo: 14, avgKg: 0.62 },
+    ],
+  });
+
+  await seedBatch(farmId, {
+    speciesId: species.get("SNA")!.id,
+    name: "Snails — pen 1",
+    batchCode: "SNA-2604",
+    penId: snailPen.id,
+    startDaysAgo: 150,
+    initialCount: 800,
+    startAgeDays: 60,
+    source: "Own stock",
+    unitCostCents: naira(120),
+    mortality: [{ daysAgo: 120, count: 40, reason: "Dry spell — insufficient misting" }],
+    weights: [{ daysAgo: 20, avgKg: 0.09 }],
+  });
+}
+
+type BatchSeed = {
+  speciesId: string;
+  name: string;
+  batchCode: string;
+  penId: string;
+  startDaysAgo: number;
+  initialCount: number;
+  startAgeDays: number;
+  source: string;
+  unitCostCents: number;
+  mortality: { daysAgo: number; count: number; reason: string }[];
+  weights: { daysAgo: number; avgKg: number }[];
+};
+
+/**
+ * Creates a batch with its full event history. `currentCount` is derived from
+ * the events rather than typed in, so the cached column and the log agree by
+ * construction — which is the invariant the app relies on everywhere else.
+ */
+async function seedBatch(farmId: string, spec: BatchSeed) {
+  const startDate = daysAgo(spec.startDaysAgo);
+  const died = spec.mortality.reduce((sum, event) => sum + event.count, 0);
+  const currentCount = spec.initialCount - died;
+  const latestWeight = spec.weights.at(-1)?.avgKg ?? null;
+
+  const batch = await prisma.animalBatch.upsert({
+    where: { farmId_batchCode: { farmId, batchCode: spec.batchCode } },
+    update: {},
+    create: {
+      farmId,
+      speciesId: spec.speciesId,
+      name: spec.name,
+      batchCode: spec.batchCode,
+      penId: spec.penId,
+      startDate,
+      startAgeDays: spec.startAgeDays,
+      initialCount: spec.initialCount,
+      currentCount,
+      source: spec.source,
+      acquisitionCostCents: spec.initialCount * spec.unitCostCents,
+      avgWeightKg: latestWeight,
+    },
+    select: { id: true },
+  });
+
+  await prisma.batchEvent.create({
+    data: {
+      batchId: batch.id,
+      eventType: "STOCKED",
+      occurredAt: startDate,
+      quantity: spec.initialCount,
+      notes: `Stocked from ${spec.source}`,
+    },
+  });
+
+  for (const event of spec.mortality) {
+    await prisma.batchEvent.create({
+      data: {
+        batchId: batch.id,
+        eventType: "MORTALITY",
+        occurredAt: daysAgo(event.daysAgo),
+        quantity: event.count,
+        reason: event.reason,
+      },
+    });
+  }
+
+  for (const sample of spec.weights) {
+    await prisma.batchEvent.create({
+      data: {
+        batchId: batch.id,
+        eventType: "WEIGHT_SAMPLE",
+        occurredAt: daysAgo(sample.daysAgo),
+        weightKg: sample.avgKg,
+      },
+    });
+  }
+
+  // Stocking is a real cost and belongs in the ledger like any other.
+  await prisma.financialTransaction.create({
+    data: {
+      farmId,
+      occurredAt: startDate,
+      direction: "EXPENSE",
+      category: "OTHER_EXPENSE",
+      amountCents: spec.initialCount * spec.unitCostCents,
+      description: `${spec.name} — ${spec.initialCount} stocked`,
+    },
+  });
+
+  return batch;
+}
