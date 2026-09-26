@@ -643,16 +643,33 @@ export async function checkMating({
   const [dam, sire] = await Promise.all([
     prisma.animal.findFirst({
       where: { id: damId, farmId },
-      select: { id: true, tagNumber: true, name: true, breed: true, sex: true, status: true, dateOfBirth: true, currentWeightKg: true },
+      select: { id: true, tagNumber: true, name: true, breed: true, sex: true, status: true, dateOfBirth: true, currentWeightKg: true, speciesId: true, species: { select: { name: true, purpose: true } } },
     }),
     prisma.animal.findFirst({
       where: { id: sireId, farmId },
-      select: { id: true, tagNumber: true, name: true, breed: true, sex: true, status: true, dateOfBirth: true, currentWeightKg: true },
+      select: { id: true, tagNumber: true, name: true, breed: true, sex: true, status: true, dateOfBirth: true, currentWeightKg: true, speciesId: true, species: { select: { name: true, purpose: true } } },
     }),
   ]);
 
   if (!dam) blockers.push("The selected dam is not an animal on this farm.");
   if (!sire) blockers.push("The selected sire is not an animal on this farm.");
+
+  // Cross-species matings are impossible, not merely inadvisable, so this is a
+  // blocker rather than a warning. It is checked here and not only in the
+  // match finder because this runs on the write path, and the finder is a
+  // preview the browser never has to go through.
+  if (dam && sire && dam.speciesId !== sire.speciesId) {
+    blockers.push(
+      `A ${dam.species.name.toLowerCase()} cannot be bred with a ${sire.species.name.toLowerCase()}.`
+    );
+  }
+
+  // Working animals are not breeding stock for the farm's production herd.
+  for (const animal of [dam, sire]) {
+    if (animal && animal.species.purpose === "WORKING") {
+      blockers.push(`${animal.tagNumber} is a working animal, not breeding stock.`);
+    }
+  }
   if (!dam || !sire) {
     return {
       blockers,

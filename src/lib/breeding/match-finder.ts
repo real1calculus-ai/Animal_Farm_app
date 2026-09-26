@@ -120,6 +120,8 @@ export async function findMatchesForDam(
       currentWeightKg: true,
       bodyConditionScore: true,
       congenitalDefects: true,
+      speciesId: true,
+      species: { select: { name: true } },
     },
   });
 
@@ -132,8 +134,17 @@ export async function findMatchesForDam(
   const [index, candidates, breedingLoad, healthByAnimal, conceptionBySire] = await Promise.all([
     loadPedigreeIndex(farmId),
     prisma.animal.findMany({
-      // A working animal is never a breeding candidate for farmed stock.
-      where: { farmId, sex: "MALE", status: "ACTIVE", ...LIVESTOCK_ONLY },
+      // Same species as the dam. Without this the finder cheerfully offers a
+      // buck rabbit for a sow — it scored them highly, too, since no shared
+      // ancestry reads as maximum genetic diversity. A working animal is
+      // likewise never a breeding candidate for farmed stock.
+      where: {
+        farmId,
+        speciesId: dam.speciesId,
+        sex: "MALE",
+        status: "ACTIVE",
+        ...LIVESTOCK_ONLY,
+      },
       select: {
         id: true,
         tagNumber: true,
