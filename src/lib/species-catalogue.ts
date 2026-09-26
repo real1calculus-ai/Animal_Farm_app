@@ -188,3 +188,42 @@ export const LIVESTOCK_ONLY = { species: { purpose: "LIVESTOCK" as const } };
 
 /** The inverse, for the screens that are specifically about working animals. */
 export const WORKING_ONLY = { species: { purpose: "WORKING" as const } };
+
+/**
+ * Vocabulary to fall back on when a screen has no species in hand.
+ *
+ * Deliberately neutral rather than porcine. "Farrowing overdue" printed
+ * against a goat is not a cosmetic slip — it tells the reader the system does
+ * not know what animal it is looking at, and that is the moment they stop
+ * trusting the rest of the number.
+ */
+export type SpeciesTerms = {
+  birth: string;
+  young: string;
+  female: string;
+  male: string;
+  group: string;
+};
+
+export const DEFAULT_TERMS: SpeciesTerms = {
+  birth: "birth",
+  young: "young",
+  female: "breeding female",
+  male: "breeding male",
+  group: "group",
+};
+
+/** Terms for a species, or the neutral fallback when none is available. */
+export function termsFor(
+  species?: Pick<
+    Species,
+    "birthEventTerm" | "youngTerm" | "adultFemaleTerm" | "adultMaleTerm" | "groupTerm"
+  > | null
+): SpeciesTerms {
+  return species ? speciesTerms(species) : DEFAULT_TERMS;
+}
+
+/** Sentence-cases a term for use at the start of a heading or alert title. */
+export function titleCase(term: string): string {
+  return term.charAt(0).toUpperCase() + term.slice(1);
+}

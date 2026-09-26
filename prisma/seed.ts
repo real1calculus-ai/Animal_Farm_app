@@ -201,11 +201,13 @@ async function main() {
     },
   });
 
+  // Feed before the other species: batches log feed against a feed type, so
+  // the types have to exist before the batches look for them.
+  await seedFeed(farm.id, pens.grower.id, pens.finisher.id);
   await seedOtherSpecies(farm.id, species);
 
   await seedWeights(farm.id);
   await seedHealth(farm.id, [litterA[0], litterC[1], ngozi]);
-  await seedFeed(farm.id, pens.grower.id, pens.finisher.id);
   await seedEquipment(farm.id);
   await seedOverheads(farm.id);
 
@@ -222,7 +224,14 @@ async function main() {
  * but pens are only nulled from Animal, so animals must go before pens do.
  */
 async function clearFarm(farmId: string) {
+  // Batches first: feeding and health records point at them, and the event
+  // log must go with the batch or a re-seed appends a second set of events on
+  // top of the first — which silently doubles every mortality rate and egg
+  // count rather than failing.
   await prisma.feedingRecord.deleteMany({ where: { farmId } });
+  await prisma.batchEvent.deleteMany({ where: { batch: { farmId } } });
+  await prisma.batchProductionRecord.deleteMany({ where: { batch: { farmId } } });
+  await prisma.animalBatch.deleteMany({ where: { farmId } });
   await prisma.feedBatch.deleteMany({ where: { feedType: { farmId } } });
   await prisma.feedingProgram.deleteMany({ where: { farmId } });
   await prisma.feedType.deleteMany({ where: { farmId } });
@@ -814,6 +823,8 @@ async function seedOtherSpecies(farmId: string, species: Map<string, { id: strin
     speciesId: species.get("BRO")!.id,
     name: "Broilers — August intake",
     batchCode: "BRO-2608",
+    feedTypeName: "Grower mash",
+    dailyFeedKgPerAnimal: 0.12,
     penId: broilerHouse.id,
     startDaysAgo: 38,
     initialCount: 500,
@@ -876,6 +887,8 @@ async function seedOtherSpecies(farmId: string, species: Map<string, { id: strin
     speciesId: species.get("CFH")!.id,
     name: "Catfish — pond 1",
     batchCode: "CFH-2605",
+    feedTypeName: "Finisher mash",
+    dailyFeedKgPerAnimal: 0.015,
     penId: pond.id,
     startDaysAgo: 120,
     initialCount: 1500,
@@ -911,6 +924,9 @@ type BatchSeed = {
   speciesId: string;
   name: string;
   batchCode: string;
+  /** Feed logged against the batch, so conversion can be computed. */
+  feedTypeName?: string;
+  dailyFeedKgPerAnimal?: number;
   penId: string;
   startDaysAgo: number;
   initialCount: number;
@@ -957,8 +973,11 @@ async function seedBatch(farmId: string, spec: BatchSeed) {
       batchId: batch.id,
       eventType: "STOCKED",
       occurredAt: startDate,
-      quantity: spec.initialCount,
-      notes: `Stocked from ${spec.source}`,
+      // Zero, not the opening count. `initialCount` is the base the event log
+      // is applied to, so repeating it here would double the batch — and
+      // double the denominator of every mortality rate, halving it.
+      quantity: 0,
+      notes: `Stocked ${spec.initialCount} from ${spec.source}`,
     },
   });
 
@@ -972,6 +991,46 @@ async function seedBatch(farmId: string, spec: BatchSeed) {
         reason: event.reason,
       },
     });
+  }
+
+  // Feed logged against the batch. Without it the batch screen can show a
+  // weight gain but no conversion ratio, which is the one number a broiler or
+  // catfish enterprise is actually judged on.
+  if (spec.feedTypeName && spec.dailyFeedKgPerAnimal) {
+    const feedType = await prisma.feedType.findFirst({
+      where: { farmId, name: spec.feedTypeName },
+      select: { id: true, costPerKgCents: true },
+    });
+
+    if (!feedType) {
+      console.warn(
+        `  ! No feed type "${spec.feedTypeName}" — ${spec.name} seeded without a feed history, so it will show no conversion ratio.`
+      );
+    } else {
+      const days = Math.min(spec.startDaysAgo, 30);
+      for (let day = days; day >= 1; day--) {
+        // Intake scales with the animals actually alive that day, not with the
+        // opening count — a flock that lost 4% did not eat as if it had not.
+        const aliveThatDay =
+          spec.initialCount -
+          spec.mortality
+            .filter((event) => event.daysAgo >= day)
+            .reduce((sum, event) => sum + event.count, 0);
+
+        await prisma.feedingRecord.create({
+          data: {
+            farmId,
+            fedAt: daysAgo(day),
+            batchId: batch.id,
+            animalCount: aliveThatDay,
+            feedTypeId: feedType.id,
+            allocatedKg: Math.round(aliveThatDay * spec.dailyFeedKgPerAnimal * 100) / 100,
+            consumedKg: Math.round(aliveThatDay * spec.dailyFeedKgPerAnimal * 0.97 * 100) / 100,
+            costPerKgCents: feedType.costPerKgCents,
+          },
+        });
+      }
+    }
   }
 
   for (const sample of spec.weights) {

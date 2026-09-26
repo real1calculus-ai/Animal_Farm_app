@@ -3,12 +3,17 @@ import { addDays, daysBetween, formatDate } from "@/lib/format";
 import type { FarmSettings } from "@prisma/client";
 import { animalLabel, type Alert } from "@/lib/alerts/types";
 import { LIVESTOCK_ONLY } from "@/lib/species-catalogue";
+import { termsFor, titleCase } from "@/lib/species-catalogue";
 
 /**
  * Breeding-calendar alerts. Every threshold reads from FarmSettings — the
  * gestation length in particular, which is ~114 days and not the 21 the
  * requirements document states (21 is the estrus cycle).
  */
+/** The animal's own vocabulary, falling back to neutral words. */
+const terms = (animal: { species?: Parameters<typeof termsFor>[0] } | null) =>
+  termsFor(animal?.species ?? null);
+
 export async function breedingAlerts(farmId: string, settings: FarmSettings, now: Date): Promise<Alert[]> {
   const alerts: Alert[] = [];
 
@@ -19,7 +24,7 @@ export async function breedingAlerts(farmId: string, settings: FarmSettings, now
       breedingDate: true,
       expectedFarrowingDate: true,
       pregnancyStatus: true,
-      dam: { select: { id: true, tagNumber: true, name: true } },
+      dam: { select: { id: true, tagNumber: true, name: true, species: { select: { birthEventTerm: true, youngTerm: true, adultFemaleTerm: true, adultMaleTerm: true, groupTerm: true } } } },
     },
   });
 
@@ -33,8 +38,8 @@ export async function breedingAlerts(farmId: string, settings: FarmSettings, now
       alerts.push({
         key: `overdue-farrowing:${record.id}`,
         severity: "CRITICAL",
-        title: "Farrowing overdue",
-        detail: `Sow ${animalLabel(record.dam)} is ${overdueBy} day${overdueBy === 1 ? "" : "s"} past her expected farrowing date of ${formatDate(record.expectedFarrowingDate)}.`,
+        title: `${titleCase(terms(record.dam).birth)} overdue`,
+        detail: `${titleCase(terms(record.dam).female)} ${animalLabel(record.dam)} is ${overdueBy} day${overdueBy === 1 ? "" : "s"} past her expected ${terms(record.dam).birth} date of ${formatDate(record.expectedFarrowingDate)}.`,
         href: `/breeding/${record.id}`,
         family: "BREEDING",
       });
@@ -46,8 +51,8 @@ export async function breedingAlerts(farmId: string, settings: FarmSettings, now
       alerts.push({
         key: `farrowing-due:${record.id}`,
         severity: "WARNING",
-        title: "Farrowing due this week",
-        detail: `Sow ${animalLabel(record.dam)} is due to farrow ${dueIn === 0 ? "today" : `in ${dueIn} day${dueIn === 1 ? "" : "s"}`} (${formatDate(record.expectedFarrowingDate)}). Move her to a farrowing pen.`,
+        title: `${titleCase(terms(record.dam).birth)} due this week`,
+        detail: `${titleCase(terms(record.dam).female)} ${animalLabel(record.dam)} is due ${dueIn === 0 ? "today" : `in ${dueIn} day${dueIn === 1 ? "" : "s"}`} (${formatDate(record.expectedFarrowingDate)}). Move her to a ${terms(record.dam).birth} pen.`,
         href: `/breeding/${record.id}`,
         family: "BREEDING",
       });
@@ -62,7 +67,7 @@ export async function breedingAlerts(farmId: string, settings: FarmSettings, now
         key: `unconfirmed-pregnancy:${record.id}`,
         severity: "WARNING",
         title: "Pregnancy unconfirmed",
-        detail: `Sow ${animalLabel(record.dam)} was bred ${sinceBreeding} days ago and is still unconfirmed — past the ${settings.estrusCycleDays}-day cycle at which a return to heat would have shown.`,
+        detail: `${titleCase(terms(record.dam).female)} ${animalLabel(record.dam)} was bred ${sinceBreeding} days ago and is still unconfirmed — past the ${settings.estrusCycleDays}-day cycle at which a return to heat would have shown.`,
         href: `/breeding/${record.id}`,
         family: "BREEDING",
       });
@@ -86,7 +91,7 @@ export async function breedingAlerts(farmId: string, settings: FarmSettings, now
         { currentWeightKg: null },
       ],
     },
-    select: { id: true, tagNumber: true, name: true, dateOfBirth: true, currentWeightKg: true },
+    select: { id: true, tagNumber: true, name: true, dateOfBirth: true, currentWeightKg: true, species: { select: { birthEventTerm: true, youngTerm: true, adultFemaleTerm: true, adultMaleTerm: true, groupTerm: true } } },
     take: 20,
   });
 
@@ -95,7 +100,7 @@ export async function breedingAlerts(farmId: string, settings: FarmSettings, now
     alerts.push({
       key: `gilt-ready:${gilt.id}`,
       severity: "INFO",
-      title: "Gilt ready to breed",
+      title: `${titleCase(terms(gilt).female)} ready to breed`,
       detail: `${animalLabel(gilt)} is ${ageDays} days old${gilt.currentWeightKg ? ` and ${gilt.currentWeightKg} kg` : ""} and has never been bred.`,
       href: `/breeding/match-finder?damId=${gilt.id}`,
       family: "BREEDING",
@@ -118,7 +123,7 @@ export async function breedingAlerts(farmId: string, settings: FarmSettings, now
       NOT: { breedingsAsDam: { some: { pregnancyStatus: { in: ["PENDING", "CONFIRMED"] } } } },
       estrusRecords: { none: { observedAt: { gte: staleHeat } } },
     },
-    select: { id: true, tagNumber: true, name: true },
+    select: { id: true, tagNumber: true, name: true, species: { select: { birthEventTerm: true, youngTerm: true, adultFemaleTerm: true, adultMaleTerm: true, groupTerm: true } } },
     take: 20,
   });
 
@@ -126,7 +131,7 @@ export async function breedingAlerts(farmId: string, settings: FarmSettings, now
     alerts.push({
       key: `not-cycling:${sow.id}`,
       severity: "WARNING",
-      title: "Sow not cycling",
+      title: `${titleCase(terms(sow).female)} not cycling`,
       detail: `${animalLabel(sow)} is open and has not been recorded in heat for over ${settings.estrusCycleDays * 2} days — worth a fertility check.`,
       href: `/breeding/estrus`,
       family: "BREEDING",

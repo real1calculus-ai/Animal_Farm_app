@@ -125,6 +125,14 @@ export function batchFcr({
 }): { gainKg: number; fcr: number | null } {
   if (avgWeightKg === null || avgWeightKg <= 0) return { gainKg: 0, fcr: null };
 
+  // No feed recorded is unknown, not perfect. Returning 0 here would print an
+  // FCR of 0.00, which reads as the best conversion ever achieved rather than
+  // as the absence of data it actually is.
+  if (feedKg <= 0) {
+    const startingBiomass = (startWeightKg ?? 0) * initialCount;
+    return { gainKg: Math.max(0, avgWeightKg * currentCount - startingBiomass), fcr: null };
+  }
+
   const startingBiomass = (startWeightKg ?? 0) * initialCount;
   const gainKg = Math.max(0, avgWeightKg * currentCount - startingBiomass);
 

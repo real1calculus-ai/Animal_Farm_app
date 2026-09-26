@@ -119,3 +119,18 @@ test("lay rate is eggs per bird per day and cannot exceed 100%", () => {
   assert.equal(layPercentage(140, 100, 1), 1);
   assert.equal(layPercentage(80, 0, 1), null);
 });
+
+test("no feed recorded reports an unknown conversion, not a perfect one", () => {
+  // An FCR of 0.00 would read as the best conversion ever achieved. It means
+  // nobody has logged any feed against the batch.
+  const { gainKg, fcr } = batchFcr({
+    feedKg: 0,
+    currentCount: 400,
+    avgWeightKg: 2,
+    initialCount: 500,
+    startWeightKg: 0.04,
+  });
+  assert.equal(fcr, null);
+  // The gain is still known and still worth showing.
+  assert.equal(gainKg, 780);
+});
