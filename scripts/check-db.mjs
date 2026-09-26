@@ -30,6 +30,11 @@ const HINTS = {
   "3D000": "The database name in the URL does not exist.",
   "28000": "The username is wrong. Supabase poolers expect postgres.<project-ref>.",
   "53300": "Too many connections — the pooler is saturated.",
+  XX000:
+    "If this says 'tenant/user not found', the Supabase project is almost\n" +
+    "  certainly PAUSED, not broken. Free-tier projects suspend after about a\n" +
+    "  week idle. Restore it from the Supabase dashboard (it takes a minute),\n" +
+    "  then re-run this. The credentials in .env stay valid across a pause.",
   ENOTFOUND: "Host does not resolve. Check the region in the hostname.",
   ETIMEDOUT: "Port unreachable — a firewall or the wrong port.",
 };

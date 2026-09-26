@@ -5,6 +5,7 @@ import type { TransactionCategory, TransactionDirection } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { recentMonths } from "@/lib/finance/period";
 import type { ProfitabilityInputs } from "@/lib/finance/profitability";
+import { LIVESTOCK_ONLY } from "@/lib/species-catalogue";
 
 /**
  * Shared finance queries. Like `src/lib/db/animals.ts`, every export takes an
@@ -456,7 +457,9 @@ export async function getAnimalSale(farmId: string, id: string) {
  */
 export async function listSellableAnimals(farmId: string) {
   return prisma.animal.findMany({
-    where: { farmId, status: "ACTIVE" },
+    // Working animals are never stock. A guard dog must not be selectable on a
+    // sale form at all, rather than being caught later by a validation error.
+    where: { farmId, status: "ACTIVE", ...LIVESTOCK_ONLY },
     select: {
       id: true,
       tagNumber: true,
@@ -511,6 +514,7 @@ export async function getProfitabilityInputs(
   const animalRows = await prisma.animal.findMany({
     where: {
       farmId,
+      ...LIVESTOCK_ONLY,
       OR: [
         { status: "ACTIVE" },
         { saleItems: { some: { sale: { soldAt: { gte: window.start, lt: window.end } } } } },

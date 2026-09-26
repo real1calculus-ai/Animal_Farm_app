@@ -14,6 +14,7 @@ import {
   type AllocatableBatch,
 } from "@/lib/feed/allocation";
 import type { FeedClassification, LifeStage, Prisma } from "@prisma/client";
+import { LIVESTOCK_ONLY } from "@/lib/species-catalogue";
 
 /**
  * Shared feed queries. The dashboard, reports and finance modules read stock
@@ -520,8 +521,10 @@ export async function getHerdWithStages(
 ): Promise<HerdAnimal[]> {
   const [settings, animals, litters] = await Promise.all([
     getFarmSettings(farmId),
+    // Ration planning covers the farmed herd. Dogs are fed, but not from the
+    // livestock feed programmes, and counting them would overstate demand.
     prisma.animal.findMany({
-      where: { farmId, status: "ACTIVE" },
+      where: { farmId, status: "ACTIVE", ...LIVESTOCK_ONLY },
       orderBy: { tagNumber: "asc" },
       select: {
         id: true,

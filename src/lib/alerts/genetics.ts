@@ -4,6 +4,7 @@ import { loadPedigreeIndex, ancestorsOf } from "@/lib/breeding/pedigree";
 import { createInbreedingCalculator } from "@/lib/breeding/inbreeding";
 import type { FarmSettings } from "@prisma/client";
 import { animalLabel, type Alert } from "@/lib/alerts/types";
+import { LIVESTOCK_ONLY } from "@/lib/species-catalogue";
 
 /** A sire taking more than this share of recent matings is a bottleneck risk. */
 const SIRE_DOMINANCE_FRACTION = 0.4;
@@ -30,8 +31,10 @@ export async function geneticsAlerts(
 
   const calculator = createInbreedingCalculator(index);
 
+  // Herd diversity is a fact about the farmed population. Averaging the
+  // guard dogs into it would move the number without meaning anything.
   const active = await prisma.animal.findMany({
-    where: { farmId, status: "ACTIVE" },
+    where: { farmId, status: "ACTIVE", ...LIVESTOCK_ONLY },
     select: { id: true, tagNumber: true, name: true },
   });
 

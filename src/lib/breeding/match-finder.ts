@@ -14,6 +14,7 @@ import {
   type InbreedingBand,
 } from "@/lib/breeding/inbreeding";
 import type { FarmSettings } from "@prisma/client";
+import { LIVESTOCK_ONLY } from "@/lib/species-catalogue";
 
 /**
  * Breeding match finder (§4.2): given a dam, rank every eligible boar.
@@ -131,7 +132,8 @@ export async function findMatchesForDam(
   const [index, candidates, breedingLoad, healthByAnimal, conceptionBySire] = await Promise.all([
     loadPedigreeIndex(farmId),
     prisma.animal.findMany({
-      where: { farmId, sex: "MALE", status: "ACTIVE" },
+      // A working animal is never a breeding candidate for farmed stock.
+      where: { farmId, sex: "MALE", status: "ACTIVE", ...LIVESTOCK_ONLY },
       select: {
         id: true,
         tagNumber: true,

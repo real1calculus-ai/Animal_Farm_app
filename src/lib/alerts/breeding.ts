@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { addDays, daysBetween, formatDate } from "@/lib/format";
 import type { FarmSettings } from "@prisma/client";
 import { animalLabel, type Alert } from "@/lib/alerts/types";
+import { LIVESTOCK_ONLY } from "@/lib/species-catalogue";
 
 /**
  * Breeding-calendar alerts. Every threshold reads from FarmSettings — the
@@ -75,6 +76,7 @@ export async function breedingAlerts(farmId: string, settings: FarmSettings, now
   const readyGilts = await prisma.animal.findMany({
     where: {
       farmId,
+      ...LIVESTOCK_ONLY,
       sex: "FEMALE",
       status: "ACTIVE",
       dateOfBirth: { lte: giltCutoff },
@@ -103,9 +105,12 @@ export async function breedingAlerts(farmId: string, settings: FarmSettings, now
   // Sows not seen in heat for well over a cycle, and not currently pregnant.
   const staleHeat = addDays(now, -settings.estrusCycleDays * 2);
 
+  // Nagging the farm to breed its guard dog is exactly the sort of noise that
+  // teaches people to stop reading the alert panel.
   const notCycling = await prisma.animal.findMany({
     where: {
       farmId,
+      ...LIVESTOCK_ONLY,
       sex: "FEMALE",
       status: "ACTIVE",
       dateOfBirth: { lte: giltCutoff },

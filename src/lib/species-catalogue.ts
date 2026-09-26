@@ -174,3 +174,17 @@ export function speciesTerms(species: Pick<Species,
     group: species.groupTerm,
   };
 }
+
+/**
+ * Prisma `where` fragment restricting a query to farmed animals.
+ *
+ * Working animals — guard dogs — are kept, fed and treated, but they are not
+ * produce. A dog in a cost-per-kg-of-gain table, in the herd's inbreeding
+ * average, or in the list of animals a boar might be matched with is a bug,
+ * not an edge case. Health and housing queries deliberately do NOT apply this:
+ * a dog's rabies vaccination is exactly the record the system should keep.
+ */
+export const LIVESTOCK_ONLY = { species: { purpose: "LIVESTOCK" as const } };
+
+/** The inverse, for the screens that are specifically about working animals. */
+export const WORKING_ONLY = { species: { purpose: "WORKING" as const } };

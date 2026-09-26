@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { daysBetween } from "@/lib/format";
 import type { DateRange, Bucket } from "@/components/reports/date-range";
 import { bucketIndexFor, buildBuckets } from "@/components/reports/date-range";
+import { LIVESTOCK_ONLY } from "@/lib/species-catalogue";
 
 /**
  * Aggregation queries behind the reports.
@@ -175,7 +176,7 @@ export type SowProductivityRow = {
 
 export async function sowProductivity(farmId: string): Promise<SowProductivityRow[]> {
   const sows = await prisma.animal.findMany({
-    where: { farmId, sex: "FEMALE", breedingsAsDam: { some: { litter: { isNot: null } } } },
+    where: { farmId, sex: "FEMALE", ...LIVESTOCK_ONLY, breedingsAsDam: { some: { litter: { isNot: null } } } },
     select: {
       id: true,
       tagNumber: true,
@@ -236,7 +237,7 @@ export type GrowthRow = {
 
 export async function growthRows(farmId: string, range: DateRange): Promise<GrowthRow[]> {
   const animals = await prisma.animal.findMany({
-    where: { farmId, weightRecords: { some: { recordedAt: { gte: range.from, lte: range.to } } } },
+    where: { farmId, ...LIVESTOCK_ONLY, weightRecords: { some: { recordedAt: { gte: range.from, lte: range.to } } } },
     select: {
       id: true,
       tagNumber: true,
