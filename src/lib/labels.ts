@@ -235,3 +235,36 @@ export function optionsFrom<T extends Record<string, string>>(
     label,
   }));
 }
+
+export const BATCH_STATUS_LABELS = {
+  ACTIVE: "Active",
+  SOLD: "Sold",
+  CLOSED: "Closed",
+} as const;
+
+export const BATCH_EVENT_TYPE_LABELS = {
+  STOCKED: "Stocked in",
+  MORTALITY: "Mortality",
+  CULL: "Culled",
+  TRANSFER_OUT: "Transferred out",
+  TRANSFER_IN: "Transferred in",
+  SALE: "Sold",
+  WEIGHT_SAMPLE: "Weight sample",
+} as const;
+
+export const BATCH_PRODUCTION_TYPE_LABELS = {
+  EGGS: "Eggs",
+  MILK: "Milk",
+  OTHER: "Other",
+} as const;
+
+export const TRACKING_MODE_LABELS = {
+  INDIVIDUAL: "Tracked individually",
+  BATCH: "Tracked as a batch",
+  HYBRID: "Breeders individually, young as groups",
+} as const;
+
+export const SPECIES_PURPOSE_LABELS = {
+  LIVESTOCK: "Livestock",
+  WORKING: "Working animal",
+} as const;
