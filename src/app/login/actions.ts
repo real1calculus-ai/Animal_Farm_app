@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { provisionProfile } from "@/lib/account-setup";
 import { createClient } from "@/lib/supabase/server";
 import { withTimeout } from "@/lib/with-timeout";
+import { checkRateLimit, formatRetryAfter, recordAuthAttempt } from "@/lib/rate-limit";
 
 // Longer than the read-only session checks in proxy.ts and lib/auth.ts: this
 // is an action the user is actively waiting on with the button showing a
@@ -25,6 +26,17 @@ export async function signIn(
     return { error: "Email and password are required." };
   }
 
+  // Checked before the credentials are sent anywhere. The message stays the
+  // same shape as a wrong password on purpose — a distinct "you are throttled"
+  // reply for real accounts only would hand back exactly the enumeration
+  // signal the generic error below exists to withhold.
+  const limit = await checkRateLimit("LOGIN", email);
+  if (!limit.allowed) {
+    return {
+      error: `Too many sign-in attempts. Please try again in ${formatRetryAfter(limit.retryAfterSeconds)}.`,
+    };
+  }
+
   const supabase = await createClient();
 
   // signInWithPassword can hang (Supabase Auth slow or unreachable) or throw
@@ -43,6 +55,10 @@ export async function signIn(
       error: "Sign-in is temporarily unavailable. Please wait a moment and try again.",
     };
   }
+
+  // Recorded whether it worked or not: counting only failures would let anyone
+  // holding one valid account clear their budget by signing in between guesses.
+  await recordAuthAttempt("LOGIN", email, !result.error);
 
   if (result.error) {
     const { status, code, message } = result.error;

@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { withTimeout } from "@/lib/with-timeout";
+import { checkRateLimit, recordAuthAttempt } from "@/lib/rate-limit";
 
 const AUTH_TIMEOUT_MS = 10_000;
 
@@ -42,16 +43,24 @@ export async function requestResetCode(
     return { ...initialResetState, error: "Enter the email address on your account." };
   }
 
-  const supabase = await createClient();
-  try {
-    await withTimeout(
-      supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } }),
-      AUTH_TIMEOUT_MS
-    );
-  } catch (err) {
-    // Swallowed on purpose — see the note above. Logged so a genuine Supabase
-    // outage is still diagnosable from the server logs.
-    console.error("signInWithOtp threw:", err);
+  // A throttled request returns the identical notice below rather than saying
+  // so. Every request costs a real email, and a limiter that announced itself
+  // would also confirm which addresses are worth hammering.
+  const limit = await checkRateLimit("PASSWORD_RESET_REQUEST", email);
+
+  if (limit.allowed) {
+    const supabase = await createClient();
+    try {
+      await withTimeout(
+        supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } }),
+        AUTH_TIMEOUT_MS
+      );
+    } catch (err) {
+      // Swallowed on purpose — see the note above. Logged so a genuine Supabase
+      // outage is still diagnosable from the server logs.
+      console.error("signInWithOtp threw:", err);
+    }
+    await recordAuthAttempt("PASSWORD_RESET_REQUEST", email, true);
   }
 
   return {
@@ -79,6 +88,20 @@ export async function verifyResetCode(
     return { ...prevState, step: "verify", error: "Enter the code from your email.", notice: null };
   }
 
+  // The tightest limit in the app. A six-digit code is a million
+  // possibilities, which is not many when guesses are free — and the code is a
+  // full account takeover, not a hint.
+  const limit = await checkRateLimit("PASSWORD_RESET_VERIFY", email);
+  if (!limit.allowed) {
+    return {
+      step: "verify",
+      error: "Too many attempts on this code. Request a new one in a few minutes.",
+      notice: null,
+      email,
+      done: false,
+    };
+  }
+
   const supabase = await createClient();
 
   let result;
@@ -98,6 +121,8 @@ export async function verifyResetCode(
       done: false,
     };
   }
+
+  await recordAuthAttempt("PASSWORD_RESET_VERIFY", email, !result.error);
 
   if (result.error) {
     console.error("verifyOtp failed:", result.error.message);
