@@ -64,7 +64,14 @@ React 19, Prisma 6 + PostgreSQL on Supabase, Tailwind 4, Supabase Auth.
 ## Verifying
 
 - `npm run typecheck` and `npm run lint` must both pass.
-- `npm test` runs the domain tests (`tsx --test`).
+- `npm test` runs the domain tests under `--conditions=react-server`. That
+  flag is load-bearing: several modules are `server-only`, which throws the
+  moment a plain Node process imports them — directly or through a chain like
+  `pedigree.ts` → `prisma.ts` → `tenant.ts`. Without it whole test files fail
+  to load and the run still reports a pass count, just a smaller one.
+- `npm run verify:tenant` asserts row-level security is actually enforced.
+  It is not enough for the policies to exist: Supabase's `postgres` role
+  carries BYPASSRLS and ignores every one of them. See `docs/rls-setup.md`.
 - The database is live on Supabase. `npm run db:check` reports the real
   Postgres error when a connection fails — Prisma collapses everything,
   including a wrong password, into P1001 "Can't reach database server".
