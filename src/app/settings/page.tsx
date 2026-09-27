@@ -137,7 +137,7 @@ export default async function SettingsPage() {
             label="Maximum sire uses per year"
             htmlFor="maxSireUsesPerYear"
             required
-            hint="Once a boar has been used this many times in a rolling 12 months the match finder starts penalising him, so one popular boar does not become the whole herd's father and narrow the gene pool."
+            hint="Once a sire has been used this many times in a rolling 12 months the match finder starts penalising him, so one popular male does not become the whole herd's father and narrow the gene pool."
           >
             <Input
               id="maxSireUsesPerYear"
@@ -154,13 +154,13 @@ export default async function SettingsPage() {
 
         <Section
           title="Reproduction timings"
-          description="The calendar the breeding and farrowing screens project dates from."
+          description="Farm-wide fallbacks. Each species carries its own figures — a goat gestates 150 days, a pig 114 — and those take precedence. These apply only where a species leaves a value unset."
         >
           <Field
             label="Gestation length (days)"
             htmlFor="gestationDays"
             required
-            hint="Sow gestation is about 114 days — the '3 months, 3 weeks, 3 days' rule. Expected farrowing dates are breeding date plus this."
+            hint="Only used where a species has no gestation of its own. Set it per species instead — 114 days for pigs, 150 for goats, 283 for cattle."
           >
             <Input
               id="gestationDays"
@@ -175,10 +175,10 @@ export default async function SettingsPage() {
           </Field>
 
           <Field
-            label="Farrowing tolerance (days)"
+            label="Birth date tolerance (days)"
             htmlFor="gestationToleranceDays"
             required
-            hint="How many days past the expected date before a sow is flagged as overdue. Normal farrowing varies by a couple of days either way."
+            hint="How many days past the expected date before an animal is flagged as overdue. Normal birth timing varies by a couple of days either way."
           >
             <Input
               id="gestationToleranceDays"

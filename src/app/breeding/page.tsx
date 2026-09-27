@@ -25,7 +25,11 @@ import {
 } from "@/lib/db/breeding";
 
 /**
- * The breeding register — and the farrowing shed's working document.
+ * The breeding register — and the birthing shed's working document.
+ *
+ * Neutral vocabulary throughout: this list mixes species, so one species'
+ * word would be wrong on most of the rows. The per-record screen knows which
+ * animal it is looking at and uses that animal's own term.
  *
  * Rows are tinted by urgency rather than only carrying a badge: an overdue sow
  * has to be findable at a glance by someone holding a phone in one hand, which
@@ -61,7 +65,7 @@ export default async function BreedingRecordsPage({
     <div className="space-y-6">
       <PageHeader
         title="Breeding records"
-        description={`Matings, pregnancies and farrowing outcomes. Gestation on this farm is ${settings.gestationDays} days.`}
+        description="Matings, pregnancies and birth outcomes across every species on the farm."
         actions={
           <>
             <ButtonLink href="/breeding/match-finder" variant="secondary">
@@ -80,14 +84,14 @@ export default async function BreedingRecordsPage({
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
-          label="Overdue farrowings"
+          label="Overdue births"
           value={String(attention.overdue.length)}
           hint={`Past expected date + ${settings.gestationToleranceDays} days`}
         />
         <StatTile
           label="Due in 7 days"
           value={String(attention.dueThisWeek.length)}
-          hint="Prepare farrowing pens"
+          hint="Prepare birthing pens"
         />
         <StatTile
           label="Awaiting confirmation"
@@ -175,7 +179,7 @@ export default async function BreedingRecordsPage({
           description={
             hasFilters
               ? "Try widening the date range or clearing the status filter."
-              : "Record a mating to start tracking pregnancies, farrowings and litters."
+              : "Record a mating to start tracking pregnancies, births and litters."
           }
           action={<ButtonLink href="/breeding/new">Record mating</ButtonLink>}
         />
@@ -188,7 +192,7 @@ export default async function BreedingRecordsPage({
                 <Th>Sire</Th>
                 <Th>Bred</Th>
                 <Th>Method</Th>
-                <Th>Expected farrowing</Th>
+                <Th>Expected birth</Th>
                 <Th>Days to go</Th>
                 <Th>Status</Th>
                 <Th>Litter outcome</Th>

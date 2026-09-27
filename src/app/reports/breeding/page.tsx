@@ -81,13 +81,13 @@ export default async function BreedingReportPage({ searchParams }: PageProps<"/r
   return (
     <ReportShell
       title="Breeding performance"
-      decision="Which sows and boars are earning their feed, and whether litter quality is holding."
+      decision="Which breeding females and males are earning their feed, and whether litter quality is holding."
       path="/reports/breeding"
       range={range}
     >
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatTile
-          label="Litters farrowed"
+          label="Litters born"
           value={String(stats.litters)}
           hint={`${stats.totalBornAlive} born alive`}
         />
@@ -110,7 +110,7 @@ export default async function BreedingReportPage({ searchParams }: PageProps<"/r
 
       <ReportSection
         title="Litter size trend"
-        description="Average born alive per farrowing. Gaps are periods with no farrowings, not zeroes."
+        description="Average born alive per birth. Gaps are periods with no births, not zeroes."
       >
         <LineChart
           title=""
@@ -124,13 +124,13 @@ export default async function BreedingReportPage({ searchParams }: PageProps<"/r
             },
           ]}
           formatValue={(value) => value.toFixed(1)}
-          emptyMessage="No farrowings in this period."
+          emptyMessage="No births in this period."
         />
       </ReportSection>
 
       <ReportSection
-        title="Conception rate by boar"
-        description="A rate is only shown once a boar has three settled matings — below that it is noise."
+        title="Conception rate by sire"
+        description="A rate is only shown once a sire has three settled matings — below that it is noise."
       >
         <ConceptionTable rows={sires} label="Boar" />
       </ReportSection>

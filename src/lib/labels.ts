@@ -69,7 +69,7 @@ export const PREGNANCY_STATUS_LABELS = {
   CONFIRMED: "Confirmed pregnant",
   NOT_PREGNANT: "Not pregnant",
   FAILED: "Failed",
-  FARROWED: "Farrowed",
+  FARROWED: "Gave birth",
   ABORTED: "Aborted",
 } as const;
 

@@ -56,7 +56,11 @@ export default async function MatchFinderPage({
     <div className="space-y-6">
       <PageHeader
         title="Breeding match finder"
-        description="Pick a dam; every active boar is scored against her pedigree, phenotype, health history and workload."
+        description={
+          result
+            ? `Every active ${result.dam.terms.male} is scored against her pedigree, phenotype, health history and workload.`
+            : "Pick a female; every eligible male is scored against her pedigree, phenotype, health history and workload."
+        }
         actions={<ButtonLink href="/breeding" variant="secondary">Breeding records</ButtonLink>}
       />
 
@@ -165,11 +169,11 @@ function MatchResults({
 
         {result.matches.length === 0 ? (
           <EmptyState
-            title="No eligible boars for this dam"
+            title={`No eligible ${result.dam.terms.male}s for this ${result.dam.terms.female}`}
             description={
               result.excluded.length > 0
-                ? "Every active boar was excluded. Open the list below to see why — introducing unrelated genetics may be the only way forward."
-                : "There are no active boars of breeding age on this farm yet."
+                ? `Every active ${result.dam.terms.male} was excluded. Open the list below to see why — introducing unrelated genetics may be the only way forward.`
+                : `There are no active ${result.dam.terms.male}s of breeding age on this farm yet.`
             }
           />
         ) : (

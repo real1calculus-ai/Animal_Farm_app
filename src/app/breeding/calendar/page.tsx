@@ -85,11 +85,11 @@ export default async function BreedingCalendarPage({
               tone="danger"
               rows={attention.overdue}
               toleranceDays={settings.gestationToleranceDays}
-              emptyText="No sow is past her date."
+              emptyText="No animal is past her date."
             />
             <AttentionCard
               title={`Farrowing in the next 7 days (${attention.dueThisWeek.length})`}
-              description="Move them to farrowing pens and start monitoring."
+              description="Move them to birthing pens and start monitoring."
               tone="warning"
               rows={attention.dueThisWeek}
               toleranceDays={settings.gestationToleranceDays}
@@ -173,7 +173,7 @@ export default async function BreedingCalendarPage({
         {events.length === 0 ? (
           <EmptyState
             title={`Nothing scheduled in ${title}`}
-            description="Matings, farrowings and weanings all appear here once a breeding is recorded."
+            description="Matings, births and weanings all appear here once a breeding is recorded."
             action={<ButtonLink href="/breeding/new">Record mating</ButtonLink>}
           />
         ) : (

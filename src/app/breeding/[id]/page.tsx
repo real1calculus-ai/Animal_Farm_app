@@ -43,6 +43,7 @@ import {
   updateBreedingNotes,
   updatePregnancyStatus,
 } from "@/app/breeding/actions";
+import { termsFor, titleCase } from "@/lib/species-catalogue";
 
 /**
  * One mating, from service to weaning.
@@ -62,6 +63,11 @@ export default async function BreedingRecordPage({ params }: PageProps<"/breedin
   if (!record) notFound();
 
   const productivity = await getSowProductivity(farmId, record.dam.id);
+
+  // The dam's own words. A goat keeper reading "farrowing" learns that the
+  // system does not know what animal it is looking at, and stops trusting the
+  // figures next to it.
+  const terms = termsFor(record.dam.species);
   const canRecordBreeding = WRITE_ROLES.includes(user.role);
   const canUpdatePregnancy = HEALTH_ROLES.includes(user.role);
 
@@ -112,7 +118,7 @@ export default async function BreedingRecordPage({ params }: PageProps<"/breedin
           hint={`Farm gestation ${settings.gestationDays} days`}
         />
         <StatTile
-          label="Expected farrowing"
+          label={`Expected ${terms.birth}`}
           value={formatDate(record.expectedFarrowingDate)}
           hint={`± ${settings.gestationToleranceDays} days`}
         />
@@ -160,7 +166,7 @@ export default async function BreedingRecordPage({ params }: PageProps<"/breedin
 
             <Detail label="Breeding date">{formatDate(record.breedingDate)}</Detail>
             <Detail label="Method">{BREEDING_METHOD_LABELS[record.method]}</Detail>
-            <Detail label="Expected farrowing">
+            <Detail label={`Expected ${terms.birth}`}>
               {formatDate(record.expectedFarrowingDate)}{" "}
               <span className="ml-1">
                 <DueCountdown
@@ -220,7 +226,7 @@ export default async function BreedingRecordPage({ params }: PageProps<"/breedin
 
         <Card className="space-y-3">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-            Sow productivity
+            {titleCase(terms.female)} productivity
           </h2>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
             Lifetime figures for {record.dam.tagNumber}.
@@ -239,7 +245,7 @@ export default async function BreedingRecordPage({ params }: PageProps<"/breedin
               value={productivity.pigsWeanedPerLitter?.toFixed(1) ?? "—"}
             />
             <Metric
-              label="Farrowing interval"
+              label={`${titleCase(terms.birth)} interval`}
               value={
                 productivity.farrowingIntervalDays === null
                   ? "—"
@@ -353,7 +359,7 @@ export default async function BreedingRecordPage({ params }: PageProps<"/breedin
       <Card className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-            {litter ? "Litter" : "Record the farrowing"}
+            {litter ? "Litter" : `Record the ${terms.birth}`}
           </h2>
           {litter ? (
             <Badge variant="success">
@@ -473,6 +479,7 @@ export default async function BreedingRecordPage({ params }: PageProps<"/breedin
           </div>
         ) : canRecordBreeding ? (
           <FarrowingForm
+              terms={terms}
             breedingRecordId={record.id}
             suggestedTags={suggestedTags}
             tagPrefix={offspringTagPrefix(record.dam.tagNumber, today)}
@@ -481,7 +488,7 @@ export default async function BreedingRecordPage({ params }: PageProps<"/breedin
           />
         ) : (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Your role cannot record farrowings.
+            Your role cannot record {terms.birth}s.
           </p>
         )}
       </Card>

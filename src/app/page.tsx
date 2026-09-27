@@ -77,7 +77,7 @@ export default async function DashboardPage() {
 
   // Life stage is derived rather than stored, so it is computed here from the
   // same helper every other screen uses — a stored copy would go stale the day
-  // nobody moves a gilt to "sow" after her first litter.
+  // nobody reclassifies a maiden female after her first litter.
   const byStage = new Map<LifeStage, number>();
   for (const animal of herd) {
     const stage = deriveLifeStage({
@@ -156,9 +156,9 @@ export default async function DashboardPage() {
           hint={`Across ${pens.penCount} pens · ${pens.utilisation === null ? "—" : formatPercent(pens.utilisation, 0)} full`}
         />
         <StatTile
-          label="Farrowing within 14 days"
+          label="Births within 14 days"
           value={String(upcoming.length)}
-          hint={upcoming.length > 0 ? "Prepare farrowing pens" : "None due"}
+          hint={upcoming.length > 0 ? "Prepare birthing pens" : "None due"}
         />
         <StatTile
           label="Under treatment"

@@ -9,6 +9,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/table";
 import { SEX_LABELS, optionsFrom } from "@/lib/labels";
 import { recordFarrowing } from "@/app/breeding/actions";
+import { DEFAULT_TERMS, titleCase, type SpeciesTerms } from "@/lib/species-catalogue";
 
 /** Nobody farrows more than this; the cap stops a typo generating 900 rows. */
 const MAX_PIGLETS = 30;
@@ -35,12 +36,15 @@ export function FarrowingForm({
   tagPrefix,
   defaultFarrowingDate,
   expectedOffspringCount,
+  terms = DEFAULT_TERMS,
 }: {
   breedingRecordId: string;
   suggestedTags: string[];
   tagPrefix: string;
   defaultFarrowingDate: string;
   expectedOffspringCount: number | null;
+  /** The dam's species vocabulary — "kidding"/"kid" for a goat. */
+  terms?: SpeciesTerms;
 }) {
   const [bornAlive, setBornAlive] = useState(0);
   const [offspring, setOffspring] = useState<OffspringRow[]>([]);
@@ -73,7 +77,7 @@ export function FarrowingForm({
       <input type="hidden" name="breedingRecordId" value={breedingRecordId} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Farrowing date" htmlFor="farrowingDate" required>
+        <Field label={`${titleCase(terms.birth)} date`} htmlFor="farrowingDate" required>
           <Input
             id="farrowingDate"
             name="farrowingDate"
@@ -83,7 +87,7 @@ export function FarrowingForm({
           />
         </Field>
 
-        <Field label="Farrowing duration (minutes)" htmlFor="farrowingDurationMinutes">
+        <Field label={`${titleCase(terms.birth)} duration (minutes)`} htmlFor="farrowingDurationMinutes">
           <Input
             id="farrowingDurationMinutes"
             name="farrowingDurationMinutes"
@@ -226,7 +230,7 @@ export function FarrowingForm({
         <Field label="Complications" htmlFor="complications" hint="Dystocia, retained placenta, …">
           <Textarea id="complications" name="complications" rows={2} />
         </Field>
-        <Field label="Post-farrowing check" htmlFor="postFarrowingCheckNotes">
+        <Field label={`Post-${terms.birth} check`} htmlFor="postFarrowingCheckNotes">
           <Textarea id="postFarrowingCheckNotes" name="postFarrowingCheckNotes" rows={2} />
         </Field>
       </div>

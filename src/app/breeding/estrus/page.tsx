@@ -106,7 +106,7 @@ export default async function EstrusPage() {
 
         <form action={recordEstrusObservation} className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Sow or gilt" required>
+            <Field label="Breeding female" required>
               <AnimalSelect name="sowId" animals={females} placeholder="Select a female" required />
             </Field>
 

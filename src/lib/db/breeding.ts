@@ -46,6 +46,21 @@ const animalSummarySelect = {
   status: true,
   dateOfBirth: true,
   currentWeightKg: true,
+  // Carried on every breeding query so screens can say "kidding" to a goat
+  // keeper and "farrowing" to a pig keeper without a second round trip.
+  species: {
+    select: {
+      id: true,
+      name: true,
+      birthEventTerm: true,
+      youngTerm: true,
+      adultFemaleTerm: true,
+      adultMaleTerm: true,
+      groupTerm: true,
+      gestationDays: true,
+      typicalLitterSize: true,
+    },
+  },
 } as const;
 
 const litterSummarySelect = {

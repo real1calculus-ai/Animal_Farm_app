@@ -14,7 +14,7 @@ import {
   type InbreedingBand,
 } from "@/lib/breeding/inbreeding";
 import type { FarmSettings } from "@prisma/client";
-import { LIVESTOCK_ONLY } from "@/lib/species-catalogue";
+import { LIVESTOCK_ONLY, termsFor, type SpeciesTerms } from "@/lib/species-catalogue";
 
 /**
  * Breeding match finder (§4.2): given a dam, rank every eligible boar.
@@ -83,6 +83,9 @@ export type MatchFinderResult = {
     ageDays: number;
     inbreedingCoefficient: number;
     pedigreeCompleteness: number;
+    speciesName: string;
+    /** So the screen can say "buck" to a goat keeper rather than "boar". */
+    terms: SpeciesTerms;
   };
   /** Eligible boars, best first. */
   matches: SireMatch[];
@@ -121,7 +124,7 @@ export async function findMatchesForDam(
       bodyConditionScore: true,
       congenitalDefects: true,
       speciesId: true,
-      species: { select: { name: true } },
+      species: { select: { name: true, adultFemaleTerm: true, adultMaleTerm: true, birthEventTerm: true, youngTerm: true, groupTerm: true } },
     },
   });
 
@@ -220,6 +223,8 @@ export async function findMatchesForDam(
       ageDays: damAgeDays,
       inbreedingCoefficient: calculator.inbreedingOf(dam.id),
       pedigreeCompleteness: pedigreeCompleteness(index, dam.id),
+      speciesName: dam.species.name,
+      terms: termsFor(dam.species),
     },
     matches,
     excluded,
