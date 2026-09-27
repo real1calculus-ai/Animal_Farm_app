@@ -2,6 +2,7 @@ import "server-only";
 
 import { prisma } from "@/lib/prisma";
 import type { CurrentUser } from "@/lib/auth";
+import { enterFarmScope } from "@/lib/tenant";
 
 
 /**
@@ -50,6 +51,14 @@ export class NoFarmAssignedError extends Error {
  */
 export async function getActiveFarmId(user: CurrentUser): Promise<string> {
   if (!user.farmId) throw new NoFarmAssignedError();
+
+  // Binds the rest of this request to the farm, so every query after this
+  // point carries the tenant into its transaction and the row-level security
+  // policies resolve. This call already precedes every farm-scoped query in
+  // the app, which is why the wiring is one line here rather than a wrapper
+  // around 183 call sites that somebody would eventually leave off.
+  enterFarmScope(user.farmId);
+
   return user.farmId;
 }
 

@@ -59,6 +59,12 @@ It asserts three things, and reports which one failed:
 
 ---
 
+## Switching the role is now safe
+
+Steps 1 and 2 will no longer break the app: the scope is established on every
+request, so queries carry their tenant. Before flipping, run
+`npm run verify:tenant` — it exits non-zero and says why if anything is off.
+
 ## How the tenant reaches the query
 
 The policies compare against `current_farm_id()`, which reads a
@@ -73,8 +79,17 @@ export is a proxy that forwards to it when a scope is active, so call sites
 stay ordinary — `prisma.animal.findMany(...)` lands on the scoped client
 without threading a parameter through several hundred places.
 
-**Still to do:** pages and Server Actions must be wrapped in `withTenant`.
-Until they are, they run unscoped — which under an enforcing role means they
-return nothing, not that they leak. Failing closed is the right direction for
-a half-finished migration, but it does mean steps 1 and 2 above will visibly
-break the app until the wrapping is done.
+**Wiring: done.** `getActiveFarmId()` calls `enterFarmScope()`, and it
+already runs before every farm-scoped query in the app — so the scope is
+established in one place rather than by a wrapper around 183 call sites that
+someone would eventually leave off. The `prisma` export is a proxy: with a
+scope active it runs each operation inside a transaction that sets
+`app.farm_id` first, and it hooks `$transaction` so the 16 interactive
+transactions set the tenant once for the whole block.
+
+Verified against the live database: unset outside a scope, matching the farm
+id inside both a transaction and a plain model call.
+
+The cost, stated plainly: a scoped query is two round trips rather than one,
+because the setting and the query have to share a transaction. Group related
+work in `prisma.$transaction(...)` where that matters.
