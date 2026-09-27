@@ -1,7 +1,28 @@
-# Pig Farm Management System
+# Animal Farm Management
 
-Breeding, health, feed, financial and asset management for a working pig farm,
-built from `docs/requirements.md`.
+Breeding, health, feed, financial and asset management for a mixed livestock
+farm. Built from `docs/requirements.md`, which specified pigs; the model was
+generalised to any species once the farm turned out to keep several.
+
+## Species
+
+Three tracking modes, because the differences are structural rather than
+cosmetic:
+
+| Mode | Animals | How it works |
+| --- | --- | --- |
+| **Individual** | pigs, goats, sheep, cattle | Named, pedigreed, weighed one at a time |
+| **Batch** | broilers, layers, catfish, snails | Stocked, fed and sold as a group |
+| **Hybrid** | rabbits, grasscutters | Breeders named, growers counted |
+
+Each species carries its own biology — a goat gestates 150 days and *kids*,
+a pig 114 and *farrows*, cattle score body condition 1–9 rather than 1–5 —
+so those are rows in a `Species` table, editable without a deploy, rather
+than constants.
+
+Dogs are kept as `WORKING` rather than `LIVESTOCK`: they get health and
+vaccination records, and are excluded from profitability, feed conversion
+and the sale gate. A guard dog in a cost-per-kg-of-gain report is a bug.
 
 Next.js 16 (App Router) · React 19 · Prisma 6 · PostgreSQL (Supabase) ·
 Tailwind 4 · Supabase Auth.
@@ -18,6 +39,13 @@ Tailwind 4 · Supabase Auth.
   so "which animals ate this delivery" is answerable after a recall.
 - **Derived alerts.** Nothing is a stale flag in a table — alerts are computed
   from live data on every load, and only a user's dismissal is stored.
+- **Batch integrity.** A flock's headcount is derived from an append-only
+  event log, not observed — nobody counts 500 birds each morning. The cached
+  count is reconciled against the log, and drift is surfaced rather than
+  silently corrected.
+- **Throttled auth.** Sign-in and password reset are rate-limited per account
+  and per client, table-backed so it survives serverless cold starts, and the
+  reset flow never reveals whether an address has an account.
 
 ## Setup
 
