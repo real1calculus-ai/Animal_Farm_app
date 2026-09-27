@@ -274,6 +274,29 @@ enum HalfSibPolicy {
   BLOCK
 }
 
+/// Where a farm stands with its subscription.
+///
+/// Billing happens on the web, never in the mobile apps: both stores take a
+/// cut of in-app digital subscriptions, which on a deliberately low price for
+/// smallholders is most of the margin. Both stores permit an account bought
+/// elsewhere being *used* in the app — what they forbid is selling or linking
+/// to the sale from inside it. So this column is written by the web checkout
+/// and only ever read by the apps.
+enum SubscriptionStatus {
+  /// Launch state. The app ships free on both stores while the farmer base
+  /// is built; pricing comes later. Modelled explicitly rather than as an
+  /// endless trial, because "free plan" and "trial that never expires" read
+  /// the same in the database and mean different things to the person.
+  FREE
+  TRIALING
+  ACTIVE
+  /// Payment failed. Still readable — locking a farmer out of their own
+  /// animal records over a failed card is both a support nightmare and the
+  /// wrong thing to do to someone whose livestock health history is in here.
+  PAST_DUE
+  CANCELED
+}
+
 enum AlertSeverity {
   INFO
   WARNING
@@ -310,6 +333,7 @@ model Farm {
   animalSales          AnimalSale[]
   equipment            Equipment[]
   alertAcks            AlertAcknowledgement[]
+  invites              FarmInvite[]
   auditLogs            AuditLog[]
 }
 
@@ -388,6 +412,7 @@ model Profile {
   animalSales        AnimalSale[]           @relation("AnimalSaleCreatedBy")
   maintenanceRecords MaintenanceRecord[]    @relation("MaintenanceRecordCreatedBy")
   alertAcks          AlertAcknowledgement[] @relation("AlertAckBy")
+  invitesCreated     FarmInvite[]           @relation("FarmInviteCreatedBy")
   auditLogs          AuditLog[]             @relation("AuditLogActor")
 
   @@index([farmId])
@@ -1398,4 +1423,36 @@ model AuthAttempt {
 
   @@index([keyHash, attemptedAt])
   @@index([attemptedAt])
+}
+
+/// An invitation for someone to join a specific farm.
+///
+/// Open signup creates a *new* farm for whoever signs up — this is how an
+/// existing farm adds its own staff instead. Without it the two cases are
+/// indistinguishable, and a SaaS cannot tell "I am starting a farm" apart
+/// from "I work at one that already exists".
+///
+/// Only a hash of the token is stored. The plaintext goes in the invite link
+/// and is never persisted, so a leaked database does not hand over working
+/// invitations to every farm on the platform.
+model FarmInvite {
+  id     String @id @default(cuid())
+  farmId String
+  farm   Farm   @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  email     String
+  role      Role   @default(WORKER)
+  tokenHash String @unique
+
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  revokedAt  DateTime?
+
+  createdByProfileId String?
+  createdBy          Profile? @relation("FarmInviteCreatedBy", fields: [createdByProfileId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([farmId, acceptedAt])
+  @@index([email])
 }

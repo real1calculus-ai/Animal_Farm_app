@@ -72,9 +72,22 @@ Not strictly required by Play. Required by the users described.
 - [ ] **Per-tenant tests** — create two farms, assert neither can read the
       other through any route.
 
-## 4. Billing — *verify before you price anything*
+## 4. Billing — *deferred: launching free on both stores*
 
-- [ ] **Confirm whether Google Play Billing is mandatory for you.** Play
+Free at launch, pricing once there is a farmer base. This is the right order:
+shipping free removes every store-billing policy question from the first
+review, and adding paid tiers later is far easier than converting a paid app
+to free. Nothing in this section blocks launch — it is what to work through
+before charging.
+
+- [x] **Launch free.** No in-app purchases means no Play or Apple billing
+      rules apply at review time, on either store.
+- [ ] When pricing arrives, keep checkout **on the web**. Both stores permit
+      an account bought elsewhere being used in the app; what they forbid is
+      selling or linking to the sale from inside it. Do not put a price, a
+      "Subscribe" button or an upgrade link in either app.
+
+- [ ] **Before charging, confirm whether Google Play Billing is mandatory.** Play
       generally requires it for digital services consumed inside the app, at
       **15% of the first $1M/year**. On a deliberately low price point for
       low-income farmers, that cut plus payment fees may be most of the margin.
