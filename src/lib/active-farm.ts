@@ -1,10 +1,8 @@
 import "server-only";
 
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import type { CurrentUser } from "@/lib/auth";
 
-const ACTIVE_FARM_COOKIE = "active-farm-id";
 
 /**
  * Resolves which farm the current request operates on.
@@ -15,50 +13,49 @@ const ACTIVE_FARM_COOKIE = "active-farm-id";
  * may switch, and even then the id is validated against the farms table rather
  * than trusted as given.
  */
-export async function getActiveFarmId(user: CurrentUser): Promise<string> {
-  if (user.farmId) return user.farmId;
-
-  if (user.role === "ADMIN") {
-    const requested = (await cookies()).get(ACTIVE_FARM_COOKIE)?.value;
-    if (requested) {
-      const farm = await prisma.farm.findFirst({
-        where: { id: requested, isActive: true },
-        select: { id: true },
-      });
-      if (farm) return farm.id;
-    }
+/**
+ * Thrown when a signed-in user has no farm. Distinct from a generic error so
+ * pages can route to a "your account is not attached to a farm" screen rather
+ * than showing a stack of red text.
+ */
+export class NoFarmAssignedError extends Error {
+  constructor() {
+    super("Your account is not attached to a farm.");
+    this.name = "NoFarmAssignedError";
   }
-
-  const fallback = await prisma.farm.findFirst({
-    where: { isActive: true },
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-  });
-
-  if (!fallback) {
-    throw new Error("No active farm exists. Create one in Settings first.");
-  }
-
-  return fallback.id;
 }
 
-export async function listActiveFarms(): Promise<{ id: string; name: string }[]> {
-  return prisma.farm.findMany({
-    where: { isActive: true },
-    orderBy: { name: "asc" },
-    select: { id: true, name: true },
-  });
-}
 
 /**
  * Farm settings, with the row created on first access. Every threshold in the
  * breeding and alert engines reads from here, so a missing row would break
  * those paths on a fresh install; creating on demand keeps that impossible.
  */
+/**
+ * The farm this request operates on.
+ *
+ * A user's own `farmId` is the only answer. There is deliberately no fallback
+ * and no cookie.
+ *
+ * Both used to exist and both became cross-tenant holes the moment the app
+ * stopped being one farm. The fallback returned the *oldest farm on the
+ * platform* to any user without one of their own, handing a stranger's herd,
+ * treatments and finances to whoever happened to have a null column. The
+ * cookie let an unattached Admin name any farm id and be believed, because it
+ * checked only that the farm existed — never that the Admin belonged to it.
+ *
+ * Neither was wrong when there was one farm. Both are how a SaaS leaks. An
+ * unattached account now gets nothing, which is the only safe reading of "we
+ * do not know which tenant you are".
+ */
+export async function getActiveFarmId(user: CurrentUser): Promise<string> {
+  if (!user.farmId) throw new NoFarmAssignedError();
+  return user.farmId;
+}
+
 export async function getFarmSettings(farmId: string) {
   const existing = await prisma.farmSettings.findUnique({ where: { farmId } });
   if (existing) return existing;
   return prisma.farmSettings.create({ data: { farmId } });
 }
 
-export { ACTIVE_FARM_COOKIE };

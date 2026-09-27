@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { completeSignup, isFirstSignup } from "@/app/signup/actions";
+import { completeSignup } from "@/app/signup/actions";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,8 +25,6 @@ const MIN_PASSWORD_LENGTH = 8;
  */
 export default function SignupPage() {
   const router = useRouter();
-
-  const [firstUser, setFirstUser] = useState<boolean | null>(null);
   const [name, setName] = useState("");
   const [farmName, setFarmName] = useState("");
   const [email, setEmail] = useState("");
@@ -36,22 +34,6 @@ export default function SignupPage() {
   const [needsEmailConfirmation, setNeedsEmailConfirmation] = useState(false);
   const [pending, setPending] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    // Only decides whether to offer the farm-name field. If it fails, the
-    // field simply stays hidden and account-setup falls back to "My Farm" —
-    // never block signup on it.
-    isFirstSignup()
-      .then((value) => {
-        if (!cancelled) setFirstUser(value);
-      })
-      .catch(() => {
-        if (!cancelled) setFirstUser(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -136,12 +118,10 @@ export default function SignupPage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            {firstUser ? (
-              <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
-                No one has set this farm up yet, so this account becomes the
-                administrator and can approve everyone who signs up after you.
-              </p>
-            ) : null}
+            <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
+              This creates your own farm, with you as its administrator. Your
+              records are visible only to you and the staff you invite.
+            </p>
 
             <Field label="Your name" htmlFor="name" required>
               <Input
@@ -155,22 +135,19 @@ export default function SignupPage() {
               />
             </Field>
 
-            {firstUser ? (
-              <Field
-                label="Farm name"
-                htmlFor="farmName"
-                hint="Shown throughout the app. You can change it later in Settings."
-              >
-                <Input
-                  id="farmName"
-                  name="farmName"
-                  type="text"
-                  placeholder="My Farm"
-                  value={farmName}
-                  onChange={(e) => setFarmName(e.target.value)}
-                />
-              </Field>
-            ) : null}
+            <Field
+              label="Farm name"
+              htmlFor="farmName"
+              hint="You can change this later in Settings."
+            >
+              <Input
+                id="farmName"
+                name="farmName"
+                placeholder="My Farm"
+                value={farmName}
+                onChange={(e) => setFarmName(e.target.value)}
+              />
+            </Field>
 
             <Field label="Email" htmlFor="email" required>
               <Input

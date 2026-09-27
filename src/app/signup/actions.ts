@@ -1,6 +1,5 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
 import { provisionProfile } from "@/lib/account-setup";
 import { requireString, optionalString } from "@/lib/validation";
@@ -46,17 +45,4 @@ export async function completeSignup(formData: FormData): Promise<CompleteSignup
     redirectTo: profile.approved ? "/" : "/pending-approval",
     isFirstUser: profile.isFirstUser,
   };
-}
-
-/**
- * Whether this install has no users yet — i.e. whoever signs up next becomes
- * the Admin and names the farm. Read by the signup form so it can show the
- * farm-name field only when it will actually be used.
- *
- * Deliberately returns a bare boolean, not a count or any profile data: this
- * is callable by an unauthenticated visitor, and "has this farm been set up"
- * is the most it should ever reveal.
- */
-export async function isFirstSignup(): Promise<boolean> {
-  return (await prisma.profile.count()) === 0;
 }

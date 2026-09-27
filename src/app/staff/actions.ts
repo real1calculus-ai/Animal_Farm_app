@@ -39,7 +39,11 @@ async function loadTarget(actor: CurrentUser, profileId: string) {
   const farmId = await getActiveFarmId(actor);
 
   const target = await prisma.profile.findFirst({
-    where: { id: profileId, OR: [{ farmId }, { farmId: null }] },
+    // Scoped strictly to the actor's own farm. The previous version also
+    // matched profiles with no farm at all, so any farm's Admin could adopt,
+    // re-role or delete an unattached account belonging to nobody — harmless
+    // with one farm, a cross-tenant grab with many.
+    where: { id: profileId, farmId },
     select: { id: true, name: true, email: true, role: true, approved: true, farmId: true },
   });
 
