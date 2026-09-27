@@ -41,5 +41,3 @@ yarn-error.log*
 next-env.d.ts
 !.env.example
 
-# A separate repo was cloned in here; it is not part of this project.
-Animal_Farm_app/
