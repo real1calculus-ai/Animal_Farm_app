@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Offline — Pig Farm Manager</title>
+<style>
+  :root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #EEF2EC;
+    color: #17241B;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 24px;
+  }
+  .card { max-width: 360px; text-align: center; }
+  .mark {
+    width: 72px; height: 72px; border-radius: 18px;
+    background: #2F6B4F; margin: 0 auto 20px; display: flex;
+    align-items: center; justify-content: center;
+  }
+  h1 { font-size: 19px; margin: 0 0 8px; }
+  p { font-size: 14px; line-height: 1.5; color: #5B6B5E; margin: 0 0 20px; }
+  button {
+    font-size: 14px; font-weight: 600; color: #fff; background: #2F6B4F;
+    border: none; border-radius: 8px; padding: 10px 20px; cursor: pointer;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #10170F; color: #EAF1E9; }
+    p { color: #9AAB9C; }
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="mark" aria-hidden="true">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#E0AF54" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.07 2.93 1 9z"/>
+        <path d="M5 13l2 2a8 8 0 0 1 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/>
+        <path d="M9 17l2 2a2.83 2.83 0 0 1 2 0l2-2a5 5 0 0 0-6 0z"/>
+        <circle cx="12" cy="20" r="1" fill="#E0AF54"/>
+      </svg>
+    </div>
+    <h1>No connection</h1>
+    <p>Pig Farm Manager needs an internet connection — your farm's records live on the server, not on this device. Reconnect and try again.</p>
+    <button onclick="location.reload()">Retry</button>
+  </div>
+</body>
+</html>

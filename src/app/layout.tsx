@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Nav } from "@/components/nav";
+import { NativeShell } from "@/components/native-shell";
 import { ToastProvider } from "@/components/ui/toast";
 import { getCurrentUser } from "@/lib/auth";
 import "./globals.css";
@@ -11,6 +12,20 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 export const metadata: Metadata = {
   title: "Animal Farm Management",
   description: "Breeding, health, feed and financial management for a working animal farm",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: "/icons/icon-192.webp",
+    apple: "/icons/icon-192.webp",
+  },
+};
+
+// `viewport-fit=cover` lets the app paint edge-to-edge in the Capacitor
+// shell; the safe-area padding that requires lives on individual layouts.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#2F6B4F",
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
@@ -26,6 +41,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex min-h-full flex-col font-sans">
         <ToastProvider>
+          <NativeShell />
           {user && user.approved ? <Nav user={user} /> : null}
           <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">{children}</div>
         </ToastProvider>

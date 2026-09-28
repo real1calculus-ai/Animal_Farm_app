@@ -68,10 +68,13 @@ export function Nav({ user }: { user: CurrentUser }) {
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
-          <span className="hidden text-right text-xs leading-tight text-zinc-500 sm:block dark:text-zinc-400">
+          <Link
+            href="/account"
+            className="hidden text-right text-xs leading-tight text-zinc-500 hover:text-zinc-900 sm:block dark:text-zinc-400 dark:hover:text-zinc-50"
+          >
             <span className="block font-medium text-zinc-700 dark:text-zinc-300">{user.name}</span>
             <span>{user.role.charAt(0) + user.role.slice(1).toLowerCase()}</span>
-          </span>
+          </Link>
           <form action="/auth/sign-out" method="post">
             <button
               type="submit"
@@ -111,6 +114,20 @@ export function Nav({ user }: { user: CurrentUser }) {
                 </Link>
               </li>
             ))}
+            <li>
+              <Link
+                href="/account"
+                onClick={() => setOpen(false)}
+                aria-current={isActive("/account") ? "page" : undefined}
+                className={`block rounded-md px-3 py-2 text-sm font-medium ${
+                  isActive("/account")
+                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                    : "text-zinc-600 dark:text-zinc-400"
+                }`}
+              >
+                My account
+              </Link>
+            </li>
           </ul>
         </nav>
       ) : null}

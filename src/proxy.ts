@@ -60,7 +60,9 @@ export default async function proxy(request: NextRequest) {
   const isPublicPath =
     request.nextUrl.pathname === "/login" ||
     request.nextUrl.pathname === "/signup" ||
-    request.nextUrl.pathname === "/forgot-password";
+    request.nextUrl.pathname === "/forgot-password" ||
+    request.nextUrl.pathname === "/privacy" ||
+    request.nextUrl.pathname === "/terms";
 
   if (!user && !isPublicPath) {
     const url = request.nextUrl.clone();
