@@ -1,0 +1,76 @@
+name: Android build
+
+# GitHub's hosted runners can reach dl.google.com (Google's Maven repo,
+# where the Android Gradle Plugin and every AndroidX library are
+# published) — the sandbox this workflow was written in can't, so this is
+# the only place the Android build is actually verified end to end.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - "capacitor.config.ts"
+      - "capacitor-www/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/android-build.yml"
+  pull_request:
+    paths:
+      - "android/**"
+      - "capacitor.config.ts"
+      - "capacitor-www/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/android-build.yml"
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Sync the native Android project from capacitor.config.ts
+        # CAPACITOR_APP_URL: set as a repo/environment secret once the app
+        # has a production domain (see capacitor.config.ts). Falls back to
+        # the placeholder so the build still compiles without it — this
+        # workflow proves the app BUILDS, not that it points at a live
+        # server.
+        env:
+          CAPACITOR_APP_URL: ${{ secrets.CAPACITOR_APP_URL }}
+        run: npx cap sync android
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
