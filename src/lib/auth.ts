@@ -89,6 +89,14 @@ export const HEALTH_ROLES: Role[] = ["ADMIN", "MANAGER", "VETERINARIAN"];
 export const FINANCE_ROLES: Role[] = ["ADMIN", "MANAGER"];
 /** Roles allowed to administer the farm itself: staff, settings, protocols. */
 export const ADMIN_ROLES: Role[] = ["ADMIN", "MANAGER"];
+/**
+ * Roles allowed to record what they saw in the field — health observations
+ * — without being able to go back and rewrite or delete the record
+ * afterwards. Shared between src/app/health/actions.ts (the online path)
+ * and src/app/api/offline/sync/route.ts (the offline one), so the two
+ * can't drift apart.
+ */
+export const OBSERVE_ROLES: Role[] = ["ADMIN", "MANAGER", "VETERINARIAN", "WORKER"];
 
 export function canSeeFinancials(role: Role): boolean {
   return FINANCE_ROLES.includes(role);

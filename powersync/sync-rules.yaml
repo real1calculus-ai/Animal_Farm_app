@@ -1,0 +1,30 @@
+# PowerSync sync rules — what replicates to which device.
+#
+# UNVERIFIED: this session couldn't reach docs.powersync.com (blocked by
+# this sandbox's network policy), so this file is written from training
+# knowledge of PowerSync's sync-rules format, not confirmed against
+# current syntax. Validate it against a real PowerSync instance (the
+# dashboard's sync rules editor lints on save) before deploying — treat
+# this as a strong draft, not a tested config.
+#
+# One bucket per farm: `request.jwt()` reads claims from the token
+# fetchCredentials() hands PowerSync (src/lib/offline/connector.ts) — the
+# Supabase access token — so `farm_id` needs to actually be a claim on
+# that JWT for this to scope correctly. Confirm that against however the
+# PowerSync instance is configured to validate Supabase's tokens; if
+# farm_id isn't a standard Supabase JWT claim, this needs a custom claim
+# added (e.g. via a Supabase Auth hook) before this bucket definition scopes
+# correctly.
+#
+# Table names on the right of each SELECT are the *source* Postgres
+# tables; the local schema in src/lib/offline/schema.ts names the
+# replicated view the same as the source table for every table synced
+# here, so no per-table renaming is needed.
+
+bucket_definitions:
+  farm_data:
+    parameters: SELECT request.jwt() ->> 'farm_id' as farm_id
+    data:
+      - SELECT a.id, a."farmId" as farm_id, a."tagNumber" as tag_number, a.name, a."speciesId" as species_id, p.name as pen_name FROM "Animal" a LEFT JOIN "Pen" p ON p.id = a."penId" WHERE a."farmId" = bucket.farm_id AND a.status = 'ACTIVE'
+      - SELECT id, "farmId" as farm_id, "animalId" as animal_id, "batchId" as batch_id, "recordedAt" as recorded_at, "recordType" as record_type, category, severity, diagnosis, treatment, "vetNotes" as vet_notes, outcome FROM "HealthRecord" WHERE "farmId" = bucket.farm_id
+      - SELECT m.id, m."healthRecordId" as health_record_id, m."drugName" as drug_name, m.dosage, m.route, m."startDate" as start_date, m."withdrawalDays" as withdrawal_days, m."isAntibiotic" as is_antibiotic, m.notes FROM "Medication" m JOIN "HealthRecord" h ON h.id = m."healthRecordId" WHERE h."farmId" = bucket.farm_id

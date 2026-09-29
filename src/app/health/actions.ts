@@ -12,7 +12,7 @@ import type {
   Severity,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { HEALTH_ROLES, requireRole, type Role } from "@/lib/auth";
+import { HEALTH_ROLES, OBSERVE_ROLES, requireRole } from "@/lib/auth";
 import { getActiveFarmId } from "@/lib/active-farm";
 import {
   HEALTH_CATEGORY_LABELS,
@@ -41,8 +41,6 @@ import { normaliseDiagnosis } from "@/lib/health/conditions";
  * clinical record afterwards. Correcting or deleting one is a vet/management
  * action, so the two role sets differ.
  */
-const OBSERVE_ROLES: Role[] = ["ADMIN", "MANAGER", "VETERINARIAN", "WORKER"];
-
 const RECORD_TYPES = Object.keys(HEALTH_RECORD_TYPE_LABELS) as HealthRecordType[];
 const CATEGORIES = Object.keys(HEALTH_CATEGORY_LABELS) as HealthCategory[];
 const SEVERITIES = Object.keys(SEVERITY_LABELS) as Severity[];

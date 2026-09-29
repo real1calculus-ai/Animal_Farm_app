@@ -3,7 +3,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ButtonLink } from "@/components/ui/button";
 import { HealthRecordForm, type AnimalChoice } from "@/components/health/health-record-form";
 import { createHealthRecord } from "@/app/health/actions";
-import { requireRole } from "@/lib/auth";
+import { requireRole, OBSERVE_ROLES } from "@/lib/auth";
 import { getActiveFarmId } from "@/lib/active-farm";
 import { toDateInputValue } from "@/lib/format";
 import { listAnimalOptions } from "@/lib/db/health";
@@ -14,7 +14,7 @@ import { listAnimalOptions } from "@/lib/db/health";
  * the one on editing an existing record. The Server Action re-checks it.
  */
 export default async function NewHealthRecordPage() {
-  const user = await requireRole(["ADMIN", "MANAGER", "VETERINARIAN", "WORKER"]);
+  const user = await requireRole(OBSERVE_ROLES);
   const farmId = await getActiveFarmId(user);
 
   const animalRows = await listAnimalOptions(farmId);
@@ -31,6 +31,11 @@ export default async function NewHealthRecordPage() {
       <PageHeader
         title="Record a health event"
         description="Illness, injury, treatment or examination — plus any medication given."
+        actions={
+          <ButtonLink href="/health/offline" variant="secondary">
+            No signal? Use offline mode
+          </ButtonLink>
+        }
       />
 
       {animals.length === 0 ? (
