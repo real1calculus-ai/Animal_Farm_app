@@ -49,7 +49,16 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - uses: android-actions/setup-android@v3
+      - name: Accept Android SDK licenses
+        # ubuntu-latest ships a full Android SDK preinstalled (ANDROID_HOME
+        # is already set) — android-actions/setup-android@v3 tries to
+        # install the long-removed legacy "tools" package on top of it and
+        # fails outright, so it's dropped in favor of just accepting
+        # licenses against what's already there. AGP downloads any specific
+        # platform/build-tools version it still needs during the build.
+        run: |
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | sort -V | tail -1)
+          yes | "$SDKMANAGER" --licenses > /dev/null
 
       - name: Sync the native Android project from capacitor.config.ts
         # CAPACITOR_APP_URL: set as a repo/environment secret once the app
