@@ -3,18 +3,23 @@
 import { useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { StatusBar, Style } from "@capacitor/status-bar";
-import { SplashScreen } from "@capacitor/splash-screen";
 import { Network } from "@capacitor/network";
 
 /**
  * Bridges the native shell into the app: matches the status bar to the
  * current color scheme (light/dark can't be baked into
- * capacitor.config.ts's static `backgroundColor`), dismisses the splash
- * screen once the first paint is in (config sets `launchAutoHide: false`,
- * so something has to hide it or the app stays on the splash forever), and
- * shows a banner when the network drops mid-session — the errorPath page in
+ * capacitor.config.ts's static `backgroundColor`), and shows a banner when
+ * the network drops mid-session — the errorPath page in
  * capacitor.config.ts only covers losing connectivity before the app has
  * loaded at all.
+ *
+ * Deliberately does NOT hide the splash screen — that used to happen here,
+ * but it only ran once this component mounted, which only happens once the
+ * real app has loaded. When it can't (no connection, wrong domain, server
+ * down), the WebView falls back to the local offline.html instead, which
+ * cannot call any Capacitor plugin on Android, so the splash was left
+ * showing forever with no way to dismiss it. capacitor.config.ts now sets
+ * `launchAutoHide: true` so the native side handles this unconditionally.
  *
  * A no-op everywhere else: every call here is a no-op on plain web
  * (`Capacitor.isNativePlatform()` is false there), so this is safe to mount
@@ -36,8 +41,6 @@ export function NativeShell() {
     applyStatusBar(media.matches);
     const onSchemeChange = (e: MediaQueryListEvent) => applyStatusBar(e.matches);
     media.addEventListener("change", onSchemeChange);
-
-    SplashScreen.hide();
 
     let networkListener: { remove: () => void } | undefined;
     Network.getStatus().then((status) => setOffline(!status.connected));

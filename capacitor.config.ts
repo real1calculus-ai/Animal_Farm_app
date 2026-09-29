@@ -39,11 +39,19 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      // Held until NativeShell (src/components/native-shell.tsx) calls
-      // SplashScreen.hide() once the first real screen has painted —
-      // launchAutoHide would otherwise flash the splash away before the
-      // remote page has finished loading.
-      launchAutoHide: false,
+      // true (the default): Capacitor dismisses the splash natively once
+      // the WebView's first page load fires, whatever that page turns out
+      // to be. This used to be false with a manual SplashScreen.hide()
+      // call from NativeShell once the real app painted — but that call
+      // only ever runs if the remote app actually loads. When it doesn't
+      // (no connection, wrong domain, server down) the WebView falls back
+      // to errorPath's offline.html instead, which cannot call
+      // SplashScreen.hide() at all — Capacitor's own docs are explicit
+      // that "on Android the html file won't have access to Capacitor
+      // plugins" — so the splash was left showing forever. A brief flash
+      // before content settles is a far better failure mode than an app
+      // that looks permanently stuck.
+      launchAutoHide: true,
       backgroundColor: "#2F6B4F",
       androidSplashResourceName: "splash",
       showSpinner: false,
