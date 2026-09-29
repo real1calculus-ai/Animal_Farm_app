@@ -7,7 +7,12 @@ name: Android build
 
 on:
   push:
-    branches: [main]
+    # `workflow_dispatch` only becomes triggerable once a workflow file has
+    # landed on the repo's default branch — not the case here by design
+    # (this branch stays isolated from main), so `push` is the only way to
+    # fire this until it's merged. Add this branch by name for now; drop it
+    # once main is the branch that matters for this workflow.
+    branches: [main, "claude/zen-einstein-snfplp"]
     paths:
       - "android/**"
       - "capacitor.config.ts"
