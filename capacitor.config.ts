@@ -8,11 +8,12 @@ import type { CapacitorConfig } from "@capacitor/cli";
  * for `cap sync`'s asset-copy step; `capacitor-www/` is a placeholder that
  * is never actually loaded at runtime.
  *
- * PRODUCTION_APP_URL must be the real deployed HTTPS origin before any
- * TestFlight or Play Console build — see the "Confirm the production
- * domain" checklist item.
+ * A public URL, not a credential — there's no security reason to keep it
+ * out of the repo (it's exactly what the WebView loads, visible in any
+ * network trace of the app regardless). CAPACITOR_APP_URL stays as an
+ * override for a future staging build without editing this file.
  */
-const PRODUCTION_APP_URL = process.env.CAPACITOR_APP_URL ?? "https://REPLACE-WITH-PRODUCTION-DOMAIN.example.com";
+const PRODUCTION_APP_URL = process.env.CAPACITOR_APP_URL ?? "https://animal-farm-app.vercel.app";
 
 const config: CapacitorConfig = {
   appId: "com.pigfarmapp.manager",
