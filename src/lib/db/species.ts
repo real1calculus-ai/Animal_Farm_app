@@ -131,16 +131,21 @@ export async function setActiveSpecies(
     .map((s) => s.id);
   const toActivate = all.filter((s) => wanted.has(s.id)).map((s) => s.id);
 
-  await prisma.$transaction([
-    prisma.species.updateMany({
+  // Callback form, not the array form. src/lib/prisma.ts only hooks the
+  // callback: the array form has no function to wrap, so it is deliberately
+  // left unscoped and `app.farm_id` is never set. Both updateMany calls would
+  // then be refused by row-level security, match zero rows, and report a
+  // successful save that changed nothing.
+  await prisma.$transaction(async (tx) => {
+    await tx.species.updateMany({
       where: { farmId, id: { in: toDeactivate } },
       data: { isActive: false },
-    }),
-    prisma.species.updateMany({
+    });
+    await tx.species.updateMany({
       where: { farmId, id: { in: toActivate } },
       data: { isActive: true },
-    }),
-  ]);
+    });
+  });
 
   return { blocked };
 }
