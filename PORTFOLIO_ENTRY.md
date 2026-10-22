@@ -220,8 +220,14 @@ sequenceDiagram
 
 ## 5. Screenshots
 
-> 📸 **Not captured automatically, and here is why**
-> Every route except `/login`, `/signup` and `/forgot-password` redirects to sign-in. Driving a login means handling a password, which this build process does not do, so Playwright would hit the same wall. Capture guide: [`assets/notion_portfolio/README.md`](./assets/notion_portfolio/README.md)
+> 📸 **Regenerate these any time**
+> ```bash
+> npx playwright install chromium     # once
+> npm run dev -- -p 3005              # in another terminal
+> read -s -p "password: " FARM_PASSWORD && echo
+> FARM_EMAIL=you@example.com FARM_PASSWORD="$FARM_PASSWORD" npm run capture
+> ```
+> Writes all seven images at 2880px wide into `assets/notion_portfolio/`. Ids for the pedigree, match finder and batch are discovered at runtime, so it keeps working after the demo data is reseeded.
 
 ![Screenshot: Breeding match finder, exclusions](./assets/notion_portfolio/01-match-finder-exclusions.png)
 *Four candidates refused, each with its reason: full siblings and parent-offspring at F = 25.0%, a half-sibling at 12.5% against the farm's 10% limit, and one too young at 87 days. A boar used twice this year carries a visible workload penalty and a "proceed only with a reason" gate. Anyone can list recommendations; showing why a candidate was refused is the part that has to be right.*
@@ -234,6 +240,16 @@ sequenceDiagram
 
 ![Screenshot: Dashboard](./assets/notion_portfolio/04-dashboard.png)
 *Sixteen live alerts, each naming its subject rather than its category. Two adjacent rows read "Doe not cycling" for a goat and "Sow not cycling" for a pig: species vocabulary comes from the species table, so the system never tells a goat keeper about farrowing.*
+
+![Screenshot: Genetic diversity report](./assets/notion_portfolio/05-genetics-report.png)
+*Inbreeding distribution across the herd, average coefficient by birth year, and ancestor contribution. The last of those is the one that matters: F stays low while a herd quietly descends from the same few founders, so the report shows what share of the active population carries each ancestor.*
+
+![Screenshot: Batch detail](./assets/notion_portfolio/06-batch-detail.png)
+*A broiler flock: 482 of 500 alive, 3.6% mortality with 9 of the 18 deaths in week one, feed conversion 2.39, cost per kilogram of gain. The headcount is derived from an append-only event log rather than observed, and the mortality rate reported half its true value until the figures were checked against real data.*
+
+![Screenshot: Dashboard on a phone](./assets/notion_portfolio/07-dashboard-mobile.png)
+*The same alert panel at 390px. This is the real form factor: one hand, in a barn, on a low-end Android.*
+
 
 ---
 

@@ -211,6 +211,26 @@ async function main() {
   await seedEquipment(farm.id);
   await seedOverheads(farm.id);
 
+  // In demo mode the farm needs an account visitors can actually sign in
+  // with. Only the Profile row is created here; the Supabase Auth user is
+  // made once by hand (see docs/demo-deployment.md), because creating auth
+  // users needs the service-role key and a seed should not hold one.
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === "true" && process.env.DEMO_AUTH_USER_ID) {
+    await prisma.profile.upsert({
+      where: { id: process.env.DEMO_AUTH_USER_ID },
+      update: { farmId: farm.id, approved: true, role: "ADMIN" },
+      create: {
+        id: process.env.DEMO_AUTH_USER_ID,
+        email: process.env.NEXT_PUBLIC_DEMO_EMAIL ?? "demo@animalfarm.app",
+        name: "Demo visitor",
+        role: "ADMIN",
+        approved: true,
+        farmId: farm.id,
+      },
+    });
+    console.log("  demo account attached to the farm");
+  }
+
   const total = await prisma.animal.count({ where: { farmId: farm.id } });
   const batches = await prisma.animalBatch.count({ where: { farmId: farm.id } });
   console.log(

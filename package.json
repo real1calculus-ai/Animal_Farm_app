@@ -16,7 +16,9 @@
     "db:studio": "prisma studio",
     "db:check": "node scripts/check-db.mjs",
     "verify": "tsx --conditions=react-server scripts/verify-domain.mts",
-    "verify:tenant": "tsx scripts/verify-tenant-isolation.mts"
+    "verify:tenant": "tsx scripts/verify-tenant-isolation.mts",
+    "capture": "tsx scripts/capture-screenshots.mts",
+    "demo:reset": "tsx scripts/demo-reset.mts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
@@ -37,6 +39,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
     "pg": "^8.23.0",
+    "playwright": "^1.63.0",
     "prisma": "^6.19.3",
     "tailwindcss": "^4",
     "tsx": "^4.23.13",

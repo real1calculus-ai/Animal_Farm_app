@@ -4,6 +4,7 @@ import { Nav } from "@/components/nav";
 import { ToastProvider } from "@/components/ui/toast";
 import { getCurrentUser } from "@/lib/auth";
 import "./globals.css";
+import { DemoBanner } from "@/components/demo-banner";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -26,6 +27,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex min-h-full flex-col font-sans">
         <ToastProvider>
+          <DemoBanner />
           {user && user.approved ? <Nav user={user} /> : null}
           <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">{children}</div>
         </ToastProvider>

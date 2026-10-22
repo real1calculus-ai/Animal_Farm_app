@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
+import { DEMO_MODE, DEMO_EMAIL, DEMO_PASSWORD } from "@/lib/demo";
 
 const initialState: SignInState = { error: null };
 
@@ -31,6 +32,32 @@ export default function LoginPage() {
           Sign in to your farm records.
         </p>
       </div>
+
+      {DEMO_MODE ? (
+        /*
+          One click in, with the credentials shown anyway. A recruiter who has
+          to type a password from a README usually closes the tab instead, and
+          the account holds nothing but invented animals, so there is nothing
+          to protect.
+        */
+        <Card className="mb-4 border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40">
+          <p className="text-sm text-emerald-900 dark:text-emerald-200">
+            This is a live demo on fabricated records. Explore it without
+            signing up.
+          </p>
+          <form action={formAction} className="mt-3">
+            <input type="hidden" name="email" value={DEMO_EMAIL} />
+            <input type="hidden" name="password" value={DEMO_PASSWORD} />
+            <Button type="submit" disabled={pending}>
+              {pending ? "Opening the demo…" : "Explore the demo"}
+            </Button>
+          </form>
+          <p className="mt-3 text-xs text-emerald-800 dark:text-emerald-300">
+            Or sign in below with <code>{DEMO_EMAIL}</code> and{" "}
+            <code>{DEMO_PASSWORD}</code>.
+          </p>
+        </Card>
+      ) : null}
 
       <Card>
         <form action={formAction} className="flex flex-col gap-4">
