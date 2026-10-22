@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
 import type { AcquisitionType, ExitReason, AnimalStatus, Sex } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getDefaultSpecies, getSpecies } from "@/lib/db/species";
+import { getSoleLivestockSpecies, getSpecies } from "@/lib/db/species";
 import { requireRole, WRITE_ROLES } from "@/lib/auth";
 import { getActiveFarmId } from "@/lib/active-farm";
 import {
@@ -192,11 +192,24 @@ export async function createAnimal(
     });
     if (parentageError) return { error: parentageError };
 
-    // The form may name a species; a farm that has only ever kept one gets it
-    // resolved for them rather than being made to pick from a list of one.
-    const speciesId = fields.speciesId ?? (await getDefaultSpecies(farmId)).id;
+    // The form names a species whenever the farm keeps more than one. A farm
+    // with a single livestock species gets it filled in rather than being made
+    // to pick from a list of one — but nothing is ever guessed: if the form
+    // said nothing and the choice is ambiguous, the save is refused.
+    const speciesId = fields.speciesId ?? (await getSoleLivestockSpecies(farmId))?.id;
+    if (!speciesId) {
+      return {
+        error:
+          "Choose a species for this animal. Your farm keeps more than one, so it cannot be assumed.",
+      };
+    }
     const species = await getSpecies(farmId, speciesId);
     if (!species) return { error: "That species does not belong to this farm" };
+    if (species.trackingMode === "BATCH") {
+      return {
+        error: `${species.name} is tracked in batches on this farm. Record a batch instead of a single animal.`,
+      };
+    }
 
     createdId = await prisma.$transaction(async (tx) => {
       const animal = await tx.animal.create({

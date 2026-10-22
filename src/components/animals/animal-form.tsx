@@ -21,6 +21,11 @@ import {
   optionsFrom,
 } from "@/lib/labels";
 
+export type SpeciesChoice = {
+  id: string;
+  name: string;
+};
+
 export type PenChoice = {
   id: string;
   name: string;
@@ -46,6 +51,8 @@ export function AnimalForm({
   values,
   candidates,
   pens,
+  /** Species this farm records individually, from listIndividualSpecies(). */
+  species,
   /** The animal itself plus its descendants — never offerable as its parents. */
   excludeIds = [],
 }: {
@@ -54,6 +61,7 @@ export function AnimalForm({
   values: AnimalFormValues;
   candidates: ParentCandidate[];
   pens: PenChoice[];
+  species: SpeciesChoice[];
   excludeIds?: string[];
 }) {
   const formId = useId();
@@ -67,6 +75,10 @@ export function AnimalForm({
   const [status, setStatus] = useState(values.status);
 
   const hasExited = status !== "ACTIVE" && status !== "RETIRED";
+
+  // Species is fixed once an animal exists — updateAnimal deliberately does not
+  // write it, so an editable control here would accept a change and discard it.
+  const speciesName = species.find((entry) => entry.id === values.speciesId)?.name ?? null;
 
   return (
     <form action={formAction} className="flex flex-col gap-8">
@@ -85,6 +97,46 @@ export function AnimalForm({
         <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
           Identity
         </h2>
+
+        {mode === "edit" ? (
+          <Field label="Species" htmlFor={`${formId}-species`} hint="Fixed once an animal is recorded. Enter a new animal to correct it.">
+            <p
+              id={`${formId}-species`}
+              className="text-sm text-zinc-700 dark:text-zinc-300"
+            >
+              {speciesName ?? "—"}
+            </p>
+          </Field>
+        ) : species.length > 1 ? (
+          <Field
+            label="Species"
+            htmlFor={`${formId}-speciesId`}
+            required
+            hint="Sets the gestation length, breeding ages and wording used for this animal everywhere else."
+          >
+            <Select
+              id={`${formId}-speciesId`}
+              name="speciesId"
+              required
+              defaultValue={values.speciesId}
+            >
+              <option value="">Choose a species…</option>
+              {species.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        ) : species.length === 1 ? (
+          <>
+            <input type="hidden" name="speciesId" value={species[0].id} />
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              Recording a {species[0].name.toLowerCase()} — the only species this farm keeps
+              individually.
+            </p>
+          </>
+        ) : null}
 
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Field

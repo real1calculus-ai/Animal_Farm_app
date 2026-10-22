@@ -7,6 +7,8 @@ import { getActiveFarmId } from "@/lib/active-farm";
 import { requireEnum } from "@/lib/validation";
 import { ROLE_LABELS } from "@/lib/labels";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createFarmInvite, revokeFarmInvite } from "@/lib/account-setup";
+import type { InviteActionState } from "@/components/staff/invite-form-state";
 import type { Role } from "@prisma/client";
 
 const ALL_ROLES = Object.keys(ROLE_LABELS) as Role[];
@@ -180,5 +182,75 @@ export async function removeStaff(profileId: string): Promise<void> {
     );
   }
 
+  revalidatePath("/staff");
+}
+
+
+/**
+ * Invites someone onto this farm.
+ *
+ * Until this existed there was no way to add a colleague at all: open signup
+ * creates a brand new farm for whoever signs up, so a second person never
+ * appeared on this screen to be approved. The invite is the only path that
+ * attaches an account to an existing farm.
+ *
+ * No email is sent — nothing in this app is wired to a mail provider. The link
+ * is handed back once for the Admin to pass on however they already talk to
+ * their staff, which on a smallholding is WhatsApp.
+ */
+export async function inviteStaff(
+  _prev: InviteActionState,
+  formData: FormData
+): Promise<InviteActionState> {
+  const actor = await requireRole(ADMIN_ROLES);
+  const farmId = await getActiveFarmId(actor);
+
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  if (!email || !email.includes("@")) {
+    return { error: "Enter the email address this person will sign up with.", created: null };
+  }
+
+  const role = requireEnum(formData, "role", ALL_ROLES);
+
+  // An Admin invite hands over the farm. Managers may add staff but not peers
+  // who outrank them, which is the same rule updateStaffRole already enforces.
+  if (role === "ADMIN" && actor.role !== "ADMIN") {
+    return { error: "Only an Admin can invite another Admin.", created: null };
+  }
+
+  const alreadyHere = await prisma.profile.findFirst({
+    where: { farmId, email },
+    select: { id: true },
+  });
+  if (alreadyHere) {
+    return { error: `${email} is already on this farm.`, created: null };
+  }
+
+  const invite = await createFarmInvite({
+    farmId,
+    email,
+    role,
+    createdByProfileId: actor.id,
+  });
+
+  revalidatePath("/staff");
+
+  return {
+    error: null,
+    created: {
+      email,
+      role,
+      token: invite.token,
+      expiresAt: invite.expiresAt.toISOString(),
+    },
+  };
+}
+
+/** Withdraws an invitation that has not been accepted. */
+export async function revokeInvite(inviteId: string): Promise<void> {
+  const actor = await requireRole(ADMIN_ROLES);
+  const farmId = await getActiveFarmId(actor);
+
+  await revokeFarmInvite(farmId, inviteId);
   revalidatePath("/staff");
 }

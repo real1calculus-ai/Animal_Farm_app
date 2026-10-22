@@ -13,8 +13,11 @@ const STATUS_OPTIONS = optionsFrom(PIG_STATUS_LABELS);
 const SEX_OPTIONS = optionsFrom(SEX_LABELS);
 const LIFE_STAGE_OPTIONS = optionsFrom(LIFE_STAGE_LABELS);
 
+export type SpeciesOption = { id: string; name: string };
+
 export type AnimalFilterValues = {
   status: string;
+  speciesId: string;
   sex: string;
   breed: string;
   penId: string;
@@ -33,10 +36,12 @@ export function AnimalFilters({
   values,
   breeds,
   pens,
+  species,
 }: {
   values: AnimalFilterValues;
   breeds: string[];
   pens: PenOption[];
+  species: SpeciesOption[];
 }) {
   return (
     <form method="get" action="/animals" className="flex flex-col gap-4">
@@ -62,6 +67,20 @@ export function AnimalFilters({
             ))}
           </Select>
         </Field>
+
+        {/* Only worth a control on a farm that keeps more than one thing. */}
+        {species.length > 1 ? (
+          <Field label="Species" htmlFor="filter-speciesId">
+            <Select id="filter-speciesId" name="speciesId" defaultValue={values.speciesId}>
+              <option value="">Any species</option>
+              {species.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        ) : null}
 
         <Field label="Sex" htmlFor="filter-sex">
           <Select id="filter-sex" name="sex" defaultValue={values.sex}>

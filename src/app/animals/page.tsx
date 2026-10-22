@@ -35,6 +35,7 @@ export default async function AnimalsPage({ searchParams }: PageProps<"/animals"
   // Defaults to ACTIVE. A herd list that opens on years of dead stock is a
   // list nobody can use to do the morning round.
   const statusParam = single(params.status) || "ACTIVE";
+  const speciesParam = single(params.speciesId);
   const sexParam = single(params.sex);
   const lifeStageParam = single(params.lifeStage);
   const breed = single(params.breed);
@@ -43,6 +44,10 @@ export default async function AnimalsPage({ searchParams }: PageProps<"/animals"
 
   const filters: Filters = {
     status: statusParam === "ALL" ? "ALL" : asEnum<AnimalStatus>(statusParam, PIG_STATUS_LABELS),
+    // Needs no allowlist, unlike the enums above: it is an equality match on an
+    // id inside a where clause that already carries farmId, so an invented
+    // value returns nothing rather than reaching another farm's animals.
+    speciesId: speciesParam || undefined,
     sex: asEnum<Sex>(sexParam, SEX_LABELS),
     lifeStage: asEnum<LifeStage>(lifeStageParam, LIFE_STAGE_LABELS),
     breed: breed || undefined,
@@ -56,7 +61,8 @@ export default async function AnimalsPage({ searchParams }: PageProps<"/animals"
   ]);
 
   const isFiltered =
-    statusParam !== "ACTIVE" || Boolean(sexParam || lifeStageParam || breed || penId || q);
+    statusParam !== "ACTIVE" ||
+    Boolean(speciesParam || sexParam || lifeStageParam || breed || penId || q);
 
   return (
     <div className="flex flex-col gap-6">
@@ -70,6 +76,7 @@ export default async function AnimalsPage({ searchParams }: PageProps<"/animals"
         <AnimalFilters
           values={{
             status: statusParam,
+            speciesId: speciesParam,
             sex: sexParam,
             breed,
             penId,
@@ -78,6 +85,7 @@ export default async function AnimalsPage({ searchParams }: PageProps<"/animals"
           }}
           breeds={options.breeds}
           pens={options.pens}
+          species={options.species}
         />
       </Card>
 

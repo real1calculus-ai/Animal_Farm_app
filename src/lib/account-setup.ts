@@ -182,3 +182,45 @@ export async function createFarmInvite(input: {
   // not hand over working invitations to every farm on the platform.
   return { id: invite.id, token, expiresAt };
 }
+
+export type PendingInvite = {
+  id: string;
+  email: string;
+  role: Role;
+  expiresAt: Date;
+  createdAt: Date;
+  isExpired: boolean;
+};
+
+/**
+ * Invitations that are still worth showing: not yet accepted, not revoked.
+ * Expired ones stay in the list and are flagged, because "I sent it and
+ * nothing happened" is answered by seeing the invitation sitting there dead,
+ * not by it silently vanishing.
+ */
+export async function listPendingInvites(farmId: string): Promise<PendingInvite[]> {
+  const invites = await prisma.farmInvite.findMany({
+    where: { farmId, acceptedAt: null, revokedAt: null },
+    select: { id: true, email: true, role: true, expiresAt: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const now = Date.now();
+  return invites.map((invite) => ({
+    ...invite,
+    isExpired: invite.expiresAt.getTime() < now,
+  }));
+}
+
+/**
+ * Withdraws an invitation. Scoped to the farm, so one farm's Admin cannot
+ * revoke another's by guessing an id. Marked rather than deleted: the row is
+ * the record that the invitation was issued and then withdrawn.
+ */
+export async function revokeFarmInvite(farmId: string, inviteId: string): Promise<boolean> {
+  const result = await prisma.farmInvite.updateMany({
+    where: { id: inviteId, farmId, acceptedAt: null, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+  return result.count > 0;
+}

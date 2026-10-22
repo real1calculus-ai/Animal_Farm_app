@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { completeSignup } from "@/app/signup/actions";
@@ -18,13 +18,15 @@ const MIN_PASSWORD_LENGTH = 8;
  * halves: the Supabase Auth user is created here in the browser, then
  * `completeSignup` creates the matching Prisma Profile server-side.
  *
- * What the new account gets is decided entirely in src/lib/account-setup.ts —
- * the first user on a fresh install becomes an approved Admin and names the
- * farm, everyone after them is an unapproved Worker who waits for that Admin.
- * Nothing on this page can influence which branch applies.
+ * What the new account gets is decided entirely in src/lib/account-setup.ts.
+ * Without an invitation the signup creates a brand new farm with this person as
+ * its Admin. With one — `/signup?invite=<token>` — they join the farm that
+ * issued it, at the role it names, already approved.
  */
 export default function SignupPage() {
   const router = useRouter();
+  const inviteToken = useSearchParams().get("invite")?.trim() ?? "";
+  const joiningByInvite = inviteToken.length > 0;
   const [name, setName] = useState("");
   const [farmName, setFarmName] = useState("");
   const [email, setEmail] = useState("");
@@ -53,7 +55,20 @@ export default function SignupPage() {
     const { data, error: signUpError } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { name: name.trim() } },
+      // The token rides along in user metadata as well as in the form below,
+      // because with email confirmation switched on this page never reaches
+      // completeSignup — the Profile is created on first sign-in instead (see
+      // src/app/login/actions.ts), and the token has to survive that gap.
+      //
+      // Metadata is writable by the user it belongs to, so this is not where
+      // the invitation is trusted: provisionProfile re-checks the token hash,
+      // its expiry, its revocation and that it was issued to this exact email.
+      options: {
+        data: {
+          name: name.trim(),
+          ...(joiningByInvite ? { inviteToken } : {}),
+        },
+      },
     });
 
     if (signUpError) {
@@ -76,7 +91,8 @@ export default function SignupPage() {
 
     const formData = new FormData();
     formData.set("name", name.trim());
-    if (farmName.trim()) formData.set("farmName", farmName.trim());
+    if (joiningByInvite) formData.set("inviteToken", inviteToken);
+    if (!joiningByInvite && farmName.trim()) formData.set("farmName", farmName.trim());
 
     try {
       const result = await completeSignup(formData);
@@ -119,8 +135,9 @@ export default function SignupPage() {
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300">
-              This creates your own farm, with you as its administrator. Your
-              records are visible only to you and the staff you invite.
+              {joiningByInvite
+                ? "You have been invited to an existing farm. Sign up with the email address the invitation was sent to — it will not work with any other."
+                : "This creates your own farm, with you as its administrator. Your records are visible only to you and the staff you invite."}
             </p>
 
             <Field label="Your name" htmlFor="name" required>
@@ -135,19 +152,23 @@ export default function SignupPage() {
               />
             </Field>
 
-            <Field
-              label="Farm name"
-              htmlFor="farmName"
-              hint="You can change this later in Settings."
-            >
-              <Input
-                id="farmName"
-                name="farmName"
-                placeholder="My Farm"
-                value={farmName}
-                onChange={(e) => setFarmName(e.target.value)}
-              />
-            </Field>
+            {/* Nothing to name when joining someone else's farm, and offering
+                the field implies the invitation might create one. */}
+            {joiningByInvite ? null : (
+              <Field
+                label="Farm name"
+                htmlFor="farmName"
+                hint="You can change this later in Settings."
+              >
+                <Input
+                  id="farmName"
+                  name="farmName"
+                  placeholder="My Farm"
+                  value={farmName}
+                  onChange={(e) => setFarmName(e.target.value)}
+                />
+              </Field>
+            )}
 
             <Field label="Email" htmlFor="email" required>
               <Input

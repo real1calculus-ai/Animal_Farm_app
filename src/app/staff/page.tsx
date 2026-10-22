@@ -3,7 +3,9 @@ import { getActiveFarmId } from "@/lib/active-farm";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/format";
 import { ROLE_LABELS, optionsFrom } from "@/lib/labels";
-import { approveStaff, removeStaff, updateStaffRole } from "@/app/staff/actions";
+import { approveStaff, inviteStaff, removeStaff, revokeInvite, updateStaffRole } from "@/app/staff/actions";
+import { listPendingInvites } from "@/lib/account-setup";
+import { InviteForm } from "@/components/staff/invite-form";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/table";
@@ -32,20 +34,25 @@ export default async function StaffPage() {
   const currentUser = await requireRole(ADMIN_ROLES);
   const farmId = await getActiveFarmId(currentUser);
 
-  const staff = await prisma.profile.findMany({
-    // Unattached profiles (a signup that arrived before any farm existed) are
-    // included so they can be approved rather than stranded — see loadTarget.
-    where: { OR: [{ farmId }, { farmId: null }] },
-    orderBy: [{ approved: "asc" }, { createdAt: "asc" }],
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      role: true,
-      approved: true,
-      createdAt: true,
-    },
-  });
+  // Strictly this farm. An earlier version also matched `farmId: null` so an
+  // orphaned signup could be adopted, but loadTarget in ./actions.ts refuses
+  // anything outside the farm — so those rows rendered with controls that every
+  // action rejected. Signup assigns a farm in all cases now, so none exist.
+  const [staff, invites] = await Promise.all([
+    prisma.profile.findMany({
+      where: { farmId },
+      orderBy: [{ approved: "asc" }, { createdAt: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        approved: true,
+        createdAt: true,
+      },
+    }),
+    listPendingInvites(farmId),
+  ]);
 
   const pending = staff.filter((member) => !member.approved);
   const active = staff.filter((member) => member.approved);
@@ -60,6 +67,56 @@ export default async function StaffPage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+          Invite someone
+        </h2>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          An invitation is the only way onto this farm. Signing up from the public page creates a
+          separate farm of their own, so send a link instead.
+        </p>
+        <Card>
+          <InviteForm action={inviteStaff} canInviteAdmin={currentUser.role === "ADMIN"} />
+        </Card>
+
+        {invites.length > 0 ? (
+          <Card className="p-0 sm:p-6">
+            <Table>
+              <Thead>
+                <Tr>
+                  <Th>Email</Th>
+                  <Th>Role</Th>
+                  <Th>Expires</Th>
+                  <Th className="text-right">Withdraw</Th>
+                </Tr>
+              </Thead>
+              <Tbody>
+                {invites.map((invite) => (
+                  <Tr key={invite.id}>
+                    <Td className="font-medium text-zinc-900 dark:text-zinc-50">{invite.email}</Td>
+                    <Td>
+                      <Badge variant={ROLE_BADGE[invite.role]}>{ROLE_LABELS[invite.role]}</Badge>
+                    </Td>
+                    <Td className="whitespace-nowrap">
+                      {invite.isExpired ? (
+                        <Badge variant="danger">Expired</Badge>
+                      ) : (
+                        formatDate(invite.expiresAt)
+                      )}
+                    </Td>
+                    <Td className="text-right">
+                      <form action={revokeInvite.bind(null, invite.id)}>
+                        <SubmitButton variant="secondary">Withdraw</SubmitButton>
+                      </form>
+                    </Td>
+                  </Tr>
+                ))}
+              </Tbody>
+            </Table>
+          </Card>
+        ) : null}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
           Waiting for approval
           {pending.length > 0 ? (
             <Badge variant="warning" className="ml-2 align-middle">
@@ -71,7 +128,7 @@ export default async function StaffPage() {
         {pending.length === 0 ? (
           <EmptyState
             title="Nobody is waiting"
-            description="New accounts created at the sign-up page appear here until you approve them and choose a role."
+            description="Someone who accepts an invitation is approved by the invitation itself and goes straight to the roster below."
           />
         ) : (
           <Card className="p-0 sm:p-6">

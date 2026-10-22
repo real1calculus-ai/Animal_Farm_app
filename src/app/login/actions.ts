@@ -91,10 +91,15 @@ export async function signIn(
       approved = profile.approved;
     } else {
       const metadataName = authUser.user_metadata?.name;
+      // An invitation accepted while email confirmation was switched on lands
+      // here rather than in completeSignup, so the token has to be read back
+      // off the auth user. provisionProfile validates it either way.
+      const metadataInvite = authUser.user_metadata?.inviteToken;
       const provisioned = await provisionProfile({
         authUserId: authUser.id,
         email: authUser.email ?? email,
         name: typeof metadataName === "string" ? metadataName : email,
+        inviteToken: typeof metadataInvite === "string" ? metadataInvite : null,
       });
       approved = provisioned.approved;
     }

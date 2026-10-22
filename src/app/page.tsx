@@ -113,13 +113,18 @@ export default async function DashboardPage() {
         <Card className="space-y-4">
           <ol className="list-decimal space-y-3 pl-5 text-sm text-zinc-700 dark:text-zinc-300">
             <li>
+              <Link href="/settings/species" className="underline underline-offset-2">Say what you keep</Link> —
+              every species is switched on to begin with. Turning off the ones you do not keep
+              clears them out of every form and dropdown in the app.
+            </li>
+            <li>
               <Link href="/pens" className="underline underline-offset-2">Set up your pens</Link> —
               occupancy, capacity limits and the biosecurity cleaning record all depend on them.
             </li>
             <li>
               <Link href="/animals/new" className="underline underline-offset-2">Add your breeding stock</Link> —
-              boars and sows first. Recording their parents where you know them is what makes the
-              inbreeding checks meaningful later.
+              the adult females and males first. Recording their parents where you know them is
+              what makes the inbreeding checks meaningful later.
             </li>
             <li>
               <Link href="/feed/types" className="underline underline-offset-2">Add your feed types</Link> and

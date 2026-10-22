@@ -5,6 +5,7 @@ import { getFarmWithSettings } from "@/lib/db/settings";
 import { saveFarmSettings } from "@/app/settings/actions";
 import { HALF_SIB_POLICY_LABELS, optionsFrom } from "@/lib/labels";
 import { PageHeader } from "@/components/ui/page-header";
+import { ButtonLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Input, Select } from "@/components/ui/input";
@@ -33,6 +34,7 @@ export default async function SettingsPage() {
       <PageHeader
         title="Farm settings"
         description="The farm's details and the thresholds the breeding engine and alerts run on."
+        actions={<ButtonLink href="/settings/species" variant="secondary">Species</ButtonLink>}
       />
 
       <form action={saveFarmSettings} className="flex flex-col gap-6">

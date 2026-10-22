@@ -34,11 +34,20 @@ export async function completeSignup(formData: FormData): Promise<CompleteSignup
   const name = requireString(formData, "name");
   const farmName = optionalString(formData, "farmName");
 
+  // The form carries the token on the happy path; metadata is the fallback for
+  // a session that was re-established after an email confirmation. Either way
+  // provisionProfile is the thing that decides whether it is valid.
+  const metadataToken = authUser.user_metadata?.inviteToken;
+  const inviteToken =
+    optionalString(formData, "inviteToken") ??
+    (typeof metadataToken === "string" ? metadataToken : null);
+
   const profile = await provisionProfile({
     authUserId: authUser.id,
     email: authUser.email ?? "",
     name,
     farmName,
+    inviteToken,
   });
 
   return {

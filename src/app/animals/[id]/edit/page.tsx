@@ -12,6 +12,7 @@ import {
   listParentCandidates,
   listPensWithOccupancy,
 } from "@/lib/db/animals";
+import { listSpecies } from "@/lib/db/species";
 import { loadPedigreeIndex } from "@/lib/breeding/pedigree";
 
 export default async function EditAnimalPage({ params }: PageProps<"/animals/[id]/edit">) {
@@ -22,10 +23,13 @@ export default async function EditAnimalPage({ params }: PageProps<"/animals/[id
   const animal = await getAnimal(farmId, id);
   if (!animal) notFound();
 
-  const [candidates, pens, index] = await Promise.all([
+  // activeOnly: false — a species the farm has since stopped keeping must still
+  // resolve to a name here, or editing one of its animals shows a dash.
+  const [candidates, pens, index, species] = await Promise.all([
     listParentCandidates(farmId),
     listPensWithOccupancy(farmId),
     loadPedigreeIndex(farmId),
+    listSpecies(farmId, { activeOnly: false }),
   ]);
 
   // Keep the animal and everything descended from it out of its own parent
@@ -46,6 +50,7 @@ export default async function EditAnimalPage({ params }: PageProps<"/animals/[id
           values={animalFormValues(animal)}
           candidates={candidates.map(toParentCandidate)}
           pens={pens}
+          species={species}
           excludeIds={excludeIds}
         />
       </Card>

@@ -33,6 +33,8 @@ export type PrismaLike = Prisma.TransactionClient;
 export type AnimalFilters = {
   /** "ALL" means every status; omitted defaults to ACTIVE at the page level. */
   status?: AnimalStatus | "ALL";
+  /** A species id. Omitted means every species the farm keeps. */
+  speciesId?: string;
   sex?: Sex;
   breed?: string;
   /** A pen id, or "NONE" for animals with no pen assigned. */
@@ -45,6 +47,7 @@ export type AnimalFilters = {
 const listSelect = {
   id: true,
   tagNumber: true,
+  species: { select: { id: true, name: true } },
   name: true,
   breed: true,
   sex: true,
@@ -80,6 +83,7 @@ export async function listAnimals(
   const where: Prisma.AnimalWhereInput = { farmId };
 
   if (filters.status && filters.status !== "ALL") where.status = filters.status;
+  if (filters.speciesId) where.speciesId = filters.speciesId;
   if (filters.sex) where.sex = filters.sex;
   if (filters.breed) where.breed = filters.breed;
   if (filters.penId === "NONE") where.penId = null;
@@ -147,7 +151,11 @@ export async function getParityOf(farmId: string, animalId: string): Promise<num
 
 /** Distinct breeds and the pens that can be filtered/moved to. */
 export async function getAnimalFilterOptions(farmId: string) {
-  const [breeds, pens] = await Promise.all([
+  // Species comes from what the farm actually keeps, not from what its animals
+  // happen to be: a farm that keeps goats but has not entered one yet should
+  // still be able to filter for them and see the empty state, rather than
+  // wonder where the option went.
+  const [breeds, pens, species] = await Promise.all([
     prisma.animal.findMany({
       where: { farmId },
       distinct: ["breed"],
@@ -155,9 +163,14 @@ export async function getAnimalFilterOptions(farmId: string) {
       orderBy: { breed: "asc" },
     }),
     listPensWithOccupancy(farmId),
+    prisma.species.findMany({
+      where: { farmId, isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
-  return { breeds: breeds.map((row) => row.breed), pens };
+  return { breeds: breeds.map((row) => row.breed), pens, species };
 }
 
 export type PenOption = {

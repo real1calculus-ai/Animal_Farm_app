@@ -18,6 +18,7 @@ export function AnimalTable({ animals }: { animals: AnimalListRow[] }) {
           <Tr>
             <Th>Tag</Th>
             <Th>Name</Th>
+            <Th>Species</Th>
             <Th>Breed</Th>
             <Th>Sex</Th>
             <Th>Age</Th>
@@ -39,6 +40,7 @@ export function AnimalTable({ animals }: { animals: AnimalListRow[] }) {
                 </Link>
               </Td>
               <Td className="whitespace-nowrap">{animal.name ?? "—"}</Td>
+              <Td className="whitespace-nowrap">{animal.species.name}</Td>
               <Td className="whitespace-nowrap">{animal.breed}</Td>
               <Td className="whitespace-nowrap">{SEX_LABELS[animal.sex]}</Td>
               <Td className="whitespace-nowrap">{formatAge(animal.dateOfBirth)}</Td>

@@ -23,6 +23,7 @@ export const EMPTY_ACTION_STATE: AnimalActionState = { error: null };
  */
 export type AnimalFormValues = {
   id: string;
+  speciesId: string;
   tagNumber: string;
   name: string;
   breed: string;
@@ -48,6 +49,7 @@ export type AnimalFormValues = {
 
 type AnimalRowLike = {
   id: string;
+  speciesId: string;
   tagNumber: string;
   name: string | null;
   breed: string;
@@ -79,6 +81,7 @@ export function animalFormValues(animal: AnimalRowLike | null): AnimalFormValues
   if (!animal) {
     return {
       id: "",
+      speciesId: "",
       tagNumber: "",
       name: "",
       breed: "",
@@ -105,6 +108,7 @@ export function animalFormValues(animal: AnimalRowLike | null): AnimalFormValues
 
   return {
     id: animal.id,
+    speciesId: animal.speciesId,
     tagNumber: animal.tagNumber,
     name: animal.name ?? "",
     breed: animal.breed,

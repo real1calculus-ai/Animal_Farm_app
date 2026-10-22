@@ -38,19 +38,109 @@ export async function ensureSpeciesCatalogue(farmId: string): Promise<Species[]>
 }
 
 /**
- * The species to assume when a caller has not chosen one — the farm's first
- * individually-tracked livestock species. Exists so screens written before
- * multi-species support keep working rather than failing on a required field.
+ * Species an animal can be recorded as individually. BATCH species are
+ * excluded: a broiler flock is a batch, and offering "Broiler chicken" on the
+ * single-animal form invites someone to create three hundred rows by hand.
+ * WORKING species are included — a guard dog is an individual.
  */
-export async function getDefaultSpecies(farmId: string): Promise<Species> {
-  const existing = await prisma.species.findFirst({
+export async function listIndividualSpecies(farmId: string): Promise<Species[]> {
+  return prisma.species.findMany({
     where: { farmId, isActive: true, trackingMode: { in: ["INDIVIDUAL", "HYBRID"] } },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ purpose: "asc" }, { name: "asc" }],
   });
-  if (existing) return existing;
+}
 
-  const all = await ensureSpeciesCatalogue(farmId);
-  const fallback = all.find((s) => s.trackingMode !== "BATCH") ?? all[0];
-  if (!fallback) throw new Error("No species are configured for this farm");
-  return fallback;
+/**
+ * The species to assume when the form did not name one — and only when there
+ * is exactly one it could possibly mean. A farm keeping nothing but goats
+ * should not be made to pick "Goat" on every animal; a farm keeping goats and
+ * pigs must not have one chosen for it behind its back.
+ *
+ * This replaced a getDefaultSpecies() that took `orderBy: { createdAt: "asc" }`.
+ * The whole catalogue was inserted in one createMany at signup, so all eleven
+ * rows shared a createdAt and Postgres returned an arbitrary winner: every
+ * animal added through the UI got a species nobody chose, and since the list
+ * screen never showed species, a sow stored as a rabbit looked completely
+ * normal.
+ */
+export async function getSoleLivestockSpecies(farmId: string): Promise<Species | null> {
+  // take: 2 is the whole point — we need to know "exactly one", not "a first".
+  const candidates = await prisma.species.findMany({
+    where: {
+      farmId,
+      isActive: true,
+      purpose: "LIVESTOCK",
+      trackingMode: { in: ["INDIVIDUAL", "HYBRID"] },
+    },
+    orderBy: { name: "asc" },
+    take: 2,
+  });
+
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
+
+export type SpeciesWithUsage = Species & {
+  /** Animals on the farm of this species, whatever their status. */
+  animalCount: number;
+  /** Batches of this species, whatever their status. */
+  batchCount: number;
+};
+
+/**
+ * The farm's species with enough usage information to decide whether one can
+ * safely be switched off. Counts ignore status deliberately: a sold animal is
+ * still a record that reads "Goat", and turning the species off underneath it
+ * would leave the history describing something the farm says it never kept.
+ */
+export async function listSpeciesWithUsage(farmId: string): Promise<SpeciesWithUsage[]> {
+  const species = await prisma.species.findMany({
+    where: { farmId },
+    orderBy: [{ purpose: "asc" }, { name: "asc" }],
+    include: { _count: { select: { animals: true, batches: true } } },
+  });
+
+  return species.map(({ _count, ...rest }) => ({
+    ...rest,
+    animalCount: _count.animals,
+    batchCount: _count.batches,
+  }));
+}
+
+/**
+ * Switches species on and off to match what the farm says it keeps.
+ *
+ * Deactivating is the dangerous direction, so it is the one that is checked: a
+ * species carrying animals or batches stays on, and the caller is told which.
+ * Nothing is ever deleted — `Animal.species` is `onDelete: Restrict` and the
+ * history has to keep reading correctly years later.
+ */
+export async function setActiveSpecies(
+  farmId: string,
+  activeIds: string[]
+): Promise<{ blocked: string[] }> {
+  const all = await listSpeciesWithUsage(farmId);
+  const wanted = new Set(activeIds);
+
+  const blocked = all
+    .filter((s) => !wanted.has(s.id) && s.animalCount + s.batchCount > 0)
+    .map((s) => s.name);
+
+  const toDeactivate = all
+    .filter((s) => !wanted.has(s.id) && s.animalCount + s.batchCount === 0)
+    .map((s) => s.id);
+  const toActivate = all.filter((s) => wanted.has(s.id)).map((s) => s.id);
+
+  await prisma.$transaction([
+    prisma.species.updateMany({
+      where: { farmId, id: { in: toDeactivate } },
+      data: { isActive: false },
+    }),
+    prisma.species.updateMany({
+      where: { farmId, id: { in: toActivate } },
+      data: { isActive: true },
+    }),
+  ]);
+
+  return { blocked };
 }
