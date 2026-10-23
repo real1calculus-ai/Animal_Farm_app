@@ -30,6 +30,58 @@ const daysAhead = (days: number) => new Date(now.getTime() + days * DAY);
 /** Naira, in kobo — matches the app's integer-minor-unit convention. */
 const naira = (amount: number) => Math.round(amount * 100);
 
+/**
+ * Attaches the demo login to the farm.
+ *
+ * In demo mode the farm needs an account visitors can actually sign in with.
+ * Only the Profile row is created; the Supabase Auth user is made once by hand
+ * (see docs/demo-deployment.md), because creating auth users needs the
+ * service-role key and a seed should not hold one.
+ *
+ * Runs before the "already has animals" guard, and separately from it. It used
+ * to sit at the end of main(), which meant attaching an account to an
+ * already-seeded farm required RESEED=1 — wiping and rebuilding the whole herd
+ * for a single Profile row that has nothing to do with it.
+ *
+ * Idempotent, so re-running after rotating the auth user is safe.
+ */
+async function attachDemoAccount(farmId: string): Promise<void> {
+  if (process.env.NEXT_PUBLIC_DEMO_MODE !== "true") return;
+
+  const authUserId = process.env.DEMO_AUTH_USER_ID?.trim();
+  if (!authUserId) {
+    console.log(
+      "  demo mode is on but DEMO_AUTH_USER_ID is unset — no demo login attached"
+    );
+    return;
+  }
+
+  // The id must be the Supabase Auth user's UUID: Profile.id *is* that id, and
+  // a Profile keyed to anything else is a row no sign-in will ever match.
+  // Catches the placeholder being pasted through unsubstituted.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(authUserId)) {
+    throw new Error(
+      `DEMO_AUTH_USER_ID is not a UUID: "${authUserId}". Copy it from the ` +
+        "Supabase dashboard under Authentication → Users, from the row for " +
+        `${process.env.NEXT_PUBLIC_DEMO_EMAIL ?? "demo@animalfarm.app"}.`
+    );
+  }
+
+  await prisma.profile.upsert({
+    where: { id: authUserId },
+    update: { farmId, approved: true, role: "ADMIN" },
+    create: {
+      id: authUserId,
+      email: process.env.NEXT_PUBLIC_DEMO_EMAIL ?? "demo@animalfarm.app",
+      name: "Demo visitor",
+      role: "ADMIN",
+      approved: true,
+      farmId,
+    },
+  });
+  console.log("  demo account attached to the farm");
+}
+
 async function main() {
   const farm = await prisma.farm.upsert({
     where: { name: FARM_NAME },
@@ -42,6 +94,9 @@ async function main() {
     update: {},
     create: { farmId: farm.id },
   });
+
+  // Independent of the herd, so it works without a reseed.
+  await attachDemoAccount(farm.id);
 
   const existingAnimals = await prisma.animal.count({ where: { farmId: farm.id } });
 
@@ -210,26 +265,6 @@ async function main() {
   await seedHealth(farm.id, [litterA[0], litterC[1], ngozi]);
   await seedEquipment(farm.id);
   await seedOverheads(farm.id);
-
-  // In demo mode the farm needs an account visitors can actually sign in
-  // with. Only the Profile row is created here; the Supabase Auth user is
-  // made once by hand (see docs/demo-deployment.md), because creating auth
-  // users needs the service-role key and a seed should not hold one.
-  if (process.env.NEXT_PUBLIC_DEMO_MODE === "true" && process.env.DEMO_AUTH_USER_ID) {
-    await prisma.profile.upsert({
-      where: { id: process.env.DEMO_AUTH_USER_ID },
-      update: { farmId: farm.id, approved: true, role: "ADMIN" },
-      create: {
-        id: process.env.DEMO_AUTH_USER_ID,
-        email: process.env.NEXT_PUBLIC_DEMO_EMAIL ?? "demo@animalfarm.app",
-        name: "Demo visitor",
-        role: "ADMIN",
-        approved: true,
-        farmId: farm.id,
-      },
-    });
-    console.log("  demo account attached to the farm");
-  }
 
   const total = await prisma.animal.count({ where: { farmId: farm.id } });
   const batches = await prisma.animalBatch.count({ where: { farmId: farm.id } });
