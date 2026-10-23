@@ -1,28 +1,12 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { initialResetState, type ResetState } from "@/components/auth/reset-state";
 import { withTimeout } from "@/lib/with-timeout";
 import { checkRateLimit, recordAuthAttempt } from "@/lib/rate-limit";
 
 const AUTH_TIMEOUT_MS = 10_000;
 
-export type ResetState = {
-  step: "request" | "verify" | "set-password";
-  error: string | null;
-  notice: string | null;
-  /** Carried forward between steps so the user retypes their email only once. */
-  email: string;
-  /** Set once the password has actually been changed — the client navigates on it. */
-  done: boolean;
-};
-
-export const initialResetState: ResetState = {
-  step: "request",
-  error: null,
-  notice: null,
-  email: "",
-  done: false,
-};
 
 /**
  * Step 1 — email a six-digit code.

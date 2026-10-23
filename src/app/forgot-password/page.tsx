@@ -4,12 +4,11 @@ import { useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  initialResetState,
   requestResetCode,
   setNewPassword,
   verifyResetCode,
-  type ResetState,
 } from "@/app/forgot-password/actions";
+import { initialResetState, type ResetState } from "@/components/auth/reset-state";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
