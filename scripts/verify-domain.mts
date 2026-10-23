@@ -12,7 +12,7 @@
  * `server-only`, which throws under a plain Node resolve.
  */
 
-import { prisma } from "@/lib/prisma";
+import { prisma, basePrisma, withTenant } from "@/lib/prisma";
 import { getFarmSettings } from "@/lib/active-farm";
 import { findMatchesForDam } from "@/lib/breeding/match-finder";
 import { breedingAlerts } from "@/lib/alerts/breeding";
@@ -24,10 +24,26 @@ import { sortAlerts } from "@/lib/alerts/types";
 import { loadPedigreeIndex } from "@/lib/breeding/pedigree";
 import { createInbreedingCalculator } from "@/lib/breeding/inbreeding";
 
+/**
+ * Picks a farm from outside any tenant scope, which the policies would
+ * otherwise hide. `basePrisma` skips the proxy, so it stays on the owner role
+ * and keeps BYPASSRLS — the one place in the codebase that is wanted, because
+ * choosing which tenant to inspect cannot itself be done from inside one.
+ *
+ * Everything after this runs inside `withTenant`, so the queries under test
+ * are subject to exactly the policies the app runs under. Before row-level
+ * security was really enforced this script worked without any of that, and
+ * its first act under enforcement was to fail on findFirstOrThrow.
+ */
 async function main() {
-  const farm = await prisma.farm.findFirstOrThrow();
-  const settings = await getFarmSettings(farm.id);
+  const farm = await basePrisma.farm.findFirstOrThrow();
   console.log(`FARM: ${farm.name}`);
+
+  await withTenant(farm.id, () => inspect(farm));
+}
+
+async function inspect(farm: { id: string; name: string }) {
+  const settings = await getFarmSettings(farm.id);
 
   const dam = await prisma.animal.findFirstOrThrow({
     where: { farmId: farm.id, sex: "FEMALE", status: "ACTIVE", motherId: { not: null } },
@@ -68,11 +84,12 @@ async function main() {
     console.log(`  [${alert.severity.padEnd(8)}] ${alert.title}: ${alert.detail.slice(0, 92)}`);
   }
 
-  await prisma.$disconnect();
 }
 
-main().catch(async (e) => {
-  console.error("FAILED:", e);
-  await prisma.$disconnect();
-  process.exit(1);
-});
+main()
+  .then(() => basePrisma.$disconnect())
+  .catch(async (e) => {
+    console.error("FAILED:", e);
+    await basePrisma.$disconnect();
+    process.exit(1);
+  });

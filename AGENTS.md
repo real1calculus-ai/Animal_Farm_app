@@ -69,9 +69,16 @@ React 19, Prisma 6 + PostgreSQL on Supabase, Tailwind 4, Supabase Auth.
   moment a plain Node process imports them — directly or through a chain like
   `pedigree.ts` → `prisma.ts` → `tenant.ts`. Without it whole test files fail
   to load and the run still reports a pass count, just a smaller one.
-- `npm run verify:tenant` asserts row-level security is actually enforced.
-  It is not enough for the policies to exist: Supabase's `postgres` role
-  carries BYPASSRLS and ignores every one of them. See `docs/rls-setup.md`.
+- `npm run verify:tenant` asserts row-level security is actually enforced,
+  and asserts it through `src/lib/prisma.ts` rather than re-implementing the
+  scoping — a database-level pass means nothing if the proxy the 183 call
+  sites use takes a different path. It is not enough for the policies to
+  exist: `DATABASE_URL` connects as `postgres`, which carries BYPASSRLS,
+  because Supabase's pooler refuses custom roles; each transaction drops to
+  `app_user` instead. Read `docs/rls-setup.md` before changing any of that.
+- Anything that queries outside a request — a script, a seed, a one-off —
+  now sees **nothing** unless it runs inside `withTenant(farmId, ...)`. That
+  is the fail-closed property working, not a broken connection.
 - The database is live on Supabase. `npm run db:check` reports the real
   Postgres error when a connection fails — Prisma collapses everything,
   including a wrong password, into P1001 "Can't reach database server".

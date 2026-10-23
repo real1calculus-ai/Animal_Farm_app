@@ -1,46 +1,87 @@
 # Turning on row-level security
 
-The policies are written and applied. They are **not being enforced yet**,
-because of one thing that is easy to miss and makes the whole exercise
-worthless if you do:
+The policies are applied **and enforced**. `npm run verify:tenant` proves it,
+and proves it through the client the app actually uses rather than a
+re-implementation of the scoping.
 
-> Supabase's `postgres` role carries `BYPASSRLS`. Connecting as it ignores
-> every policy on every table. `npm run verify:tenant` reports this rather
-> than letting you believe otherwise.
-
-Two steps, both yours — the first needs a password, which I don't handle.
+This took one non-obvious turn, recorded here because it looks wrong at a
+glance and someone will otherwise "fix" it.
 
 ---
 
-## 1. Give `app_user` a password
+## The connection role is `postgres`, on purpose
 
-The role exists already (created by migration `20260927160000_app_role_for_rls`)
-with `NOBYPASSRLS` and permission to run DML and nothing else. It has no
-password, so it cannot log in yet.
+The intended design was a dedicated `app_user` with `NOBYPASSRLS` in
+`DATABASE_URL`. That cannot work on Supabase:
 
-In the **Supabase SQL editor**:
+- **The pooler will not authenticate a custom role.** Supavisor holds
+  credentials for the users it knows about — in practice `postgres`. A
+  connection as `app_user` is refused with `28P01 password authentication
+  failed` no matter how recently the password was set, and it fails on the
+  session pooler (5432) as well as the transaction pooler (6543), so it is not
+  the usual credential lag. Setting the password again from inside the database
+  and immediately connecting still fails, which is what rules out a typo.
+- **`options=-c role=app_user` is silently discarded.** The connection
+  succeeds and `current_user` comes back as `postgres`. No error, nothing in
+  the logs.
+- **The direct host would accept either.** `db.<ref>.supabase.co` is IPv6-only
+  without the paid IPv4 add-on.
+
+So the connection is made as `postgres`, which carries `BYPASSRLS`, and
+`src/lib/tenant.ts` drops each transaction to `app_user`:
+
+```
+SET LOCAL ROLE app_user;
+SELECT set_config('app.farm_id', $1, true);
+```
+
+`SET LOCAL` is transaction-scoped, so the role reverts on commit and the
+connection returns to the pool unchanged — which matters under transaction
+pooling, where the next request gets the same backend.
+
+Both halves of the proxy in `src/lib/prisma.ts` do this: the scoped path via
+`applyFarmScope`, and the **unscoped** path via `applyRuntimeRole`. The
+unscoped path is not optional. Sign-in, signup and auth throttling run before
+any farm is known, and if those ran as `postgres` they would see every farm on
+the platform instead of none.
+
+`basePrisma` skips the proxy and therefore keeps `BYPASSRLS`. Nothing in
+`src/` imports it. `scripts/verify-domain.mts` does, to choose which tenant to
+inspect — which cannot be done from inside a tenant.
+
+### What this required once
+
+`postgres` held `ADMIN` on `app_user` but not `SET`, which PostgreSQL 16 split
+apart, so `SET ROLE app_user` failed with `42501 permission denied to set
+role`. Fixed with:
 
 ```sql
-ALTER ROLE app_user WITH LOGIN PASSWORD 'generate-a-long-random-one';
+GRANT app_user TO postgres WITH INHERIT FALSE, SET TRUE;
 ```
 
-Use something long and alphanumeric. If it contains `@ & : / ? #` you will
-have to percent-encode it into the URL, and that is an avoidable irritation.
+`INHERIT FALSE` is deliberate: `postgres` must be able to *become* the weaker
+role on purpose, not pick its privileges up implicitly. This is a
+de-escalation capability — `postgres` already owns the database — and
+`verify:tenant` asserts it, printing the exact `GRANT` if it is missing.
 
-## 2. Point the runtime at it
+`app_user` needs no password under this arrangement. `SET ROLE` requires
+membership, not authentication.
 
-In `.env`, `DATABASE_URL` becomes `app_user` and **`DIRECT_URL` stays
-`postgres`**:
+### One policy that does not fail closed
 
+`Profile` reads:
+
+```sql
+("farmId" IS NULL) OR ("farmId" = current_farm_id()) OR (current_farm_id() IS NULL)
 ```
-DATABASE_URL="postgresql://app_user.<project-ref>:<password>@aws-1-eu-west-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
-DIRECT_URL="postgresql://postgres.<project-ref>:<password>@aws-1-eu-west-1.pooler.supabase.com:5432/postgres"
-```
 
-That split is deliberate. `app_user` cannot run DDL, so migrations must keep
-going through `postgres`; the runtime must *not*, or the policies do nothing.
+That third clause makes every profile on the platform visible when no tenant
+is set, so sign-in can find an account before the farm is known. Harmless with
+one farm; with many it exposes names, emails and roles to any query that
+forgets its scope. Worth narrowing to a self-read on `id` before a second real
+tenant exists.
 
-Set the same split in Vercel when you deploy.
+---
 
 ## 3. Check it
 

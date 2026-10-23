@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 
-import { applyFarmScope, basePrisma, currentFarmId } from "@/lib/tenant";
+import { applyFarmScope, applyRuntimeRole, basePrisma, currentFarmId } from "@/lib/tenant";
 
 /**
  * The client every query in the app goes through.
@@ -37,6 +37,34 @@ const MODEL_KEYS = new Set(
 
 type AnyClient = Record<string, unknown>;
 
+/**
+ * A model delegate for requests with no farm scope — sign-in, signup, auth
+ * throttling. Still wrapped in a transaction, because the runtime role has to
+ * be dropped from `postgres` to `app_user` and `SET LOCAL` needs one. Without
+ * it an unscoped query would run with BYPASSRLS and see every farm on the
+ * platform rather than none.
+ */
+function unscopedDelegate(model: string) {
+  return new Proxy(
+    {},
+    {
+      get(_target, operation: string) {
+        if (!MODEL_OPERATIONS.has(operation)) {
+          return (basePrisma as unknown as AnyClient)[model] &&
+            ((basePrisma as unknown as Record<string, AnyClient>)[model][operation]);
+        }
+
+        return (...args: unknown[]) =>
+          basePrisma.$transaction(async (tx) => {
+            await applyRuntimeRole(tx);
+            const delegate = (tx as unknown as Record<string, AnyClient>)[model];
+            return (delegate[operation] as (...a: unknown[]) => Promise<unknown>)(...args);
+          });
+      },
+    }
+  );
+}
+
 function scopedDelegate(model: string, farmId: string) {
   return new Proxy(
     {},
@@ -66,12 +94,15 @@ export const prisma = new Proxy(basePrisma, {
     // An explicit transaction: set the tenant once, for the whole of it.
     // Without this every `tx.animal.create(...)` inside the 16 interactive
     // transactions in this codebase would run with no tenant and be refused.
-    if (key === "$transaction" && farmId) {
+    if (key === "$transaction") {
       return (arg: unknown, options?: unknown) => {
         if (typeof arg === "function") {
           const fn = arg as (tx: Prisma.TransactionClient) => Promise<unknown>;
           return basePrisma.$transaction(async (tx) => {
-            await applyFarmScope(tx, farmId);
+            // Role either way; the tenant only when there is one. An unscoped
+            // transaction still must not run as the BYPASSRLS owner.
+            if (farmId) await applyFarmScope(tx, farmId);
+            else await applyRuntimeRole(tx);
             return fn(tx);
           }, options as Parameters<typeof basePrisma.$transaction>[1]);
         }
@@ -81,7 +112,9 @@ export const prisma = new Proxy(basePrisma, {
       };
     }
 
-    if (farmId && MODEL_KEYS.has(key)) return scopedDelegate(key, farmId);
+    if (MODEL_KEYS.has(key)) {
+      return farmId ? scopedDelegate(key, farmId) : unscopedDelegate(key);
+    }
 
     const value = Reflect.get(target, property, receiver);
     return typeof value === "function" ? value.bind(target) : value;

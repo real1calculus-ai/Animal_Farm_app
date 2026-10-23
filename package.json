@@ -16,7 +16,7 @@
     "db:studio": "prisma studio",
     "db:check": "node scripts/check-db.mjs",
     "verify": "tsx --conditions=react-server scripts/verify-domain.mts",
-    "verify:tenant": "tsx scripts/verify-tenant-isolation.mts",
+    "verify:tenant": "tsx --conditions=react-server scripts/verify-tenant-isolation.mts",
     "capture": "tsx scripts/capture-screenshots.mts",
     "demo:reset": "tsx scripts/demo-reset.mts"
   },
